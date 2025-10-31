@@ -858,9 +858,19 @@ function addImageToFrame(file) {
 
 // Apply aspect ratio to frame
 function applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frameProps, originalImageUrl) {
-    // Image always uses contain mode (appears complete)
-    const scale = Math.min(frameWidth / img.width, frameHeight / img.height);
-    img.scale(scale);
+    // Get original image dimensions (not scaled)
+    const imgWidth = img.width;
+    const imgHeight = img.height;
+
+    // Image always uses contain mode (appears complete) - use Math.min to fit entire image
+    // Math.min ensures the entire image fits within the frame, leaving blank space if needed
+    const scale = Math.min(frameWidth / imgWidth, frameHeight / imgHeight);
+
+    // Set scale absolutely (not multiply) to ensure image fits completely
+    img.set({
+        scaleX: scale,
+        scaleY: scale,
+    });
 
     // Create clip path based on frame shape
     let clipPath;
