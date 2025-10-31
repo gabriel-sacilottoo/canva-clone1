@@ -83,6 +83,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            transition: all 0.3s ease;
         }
         /* Modal styles */
         .modal {
@@ -116,6 +117,42 @@
         }
         .shape-option:hover {
             transform: scale(1.05);
+        }
+        .image-preview-container {
+            position: relative;
+            width: 100%;
+            max-height: 200px;
+            overflow: hidden;
+            border-radius: 8px;
+            border: 2px solid #E5E7EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #F3F4F6;
+        }
+        .image-preview-container img {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+        }
+        .delete-image-btn {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .delete-image-btn:hover {
+            background: rgba(220, 38, 38, 1);
+            transform: scale(1.1);
         }
     </style>
 </head>
@@ -225,6 +262,25 @@
 <span class="material-symbols-outlined text-sm">upload</span>
                         Selecionar Imagem
                     </button>
+
+<!-- Image Preview and Crop Options -->
+<div id="image-preview-section" class="hidden mt-3">
+<div class="image-preview-container">
+<img id="frame-image-preview" src="" alt="Preview"/>
+<div class="delete-image-btn" id="delete-frame-image-btn">
+<span class="material-symbols-outlined text-lg">delete</span>
+</div>
+</div>
+
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary mt-3">Recorte</label>
+<select id="crop-mode" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="cover">Cobrir</option>
+<option value="contain">Conter</option>
+<option value="width">Largura</option>
+<option value="height">Altura</option>
+<option value="original">Manter tamanho</option>
+</select>
+</div>
 </div>
 
 <!-- Fill Color -->
@@ -414,12 +470,17 @@ let previousJson = null;
 let zoomLevel = 1;
 let activeObject = null;
 let draggedLayerIndex = null;
+let copiedObject = null;
+
+// Canvas base dimensions
+const CANVAS_WIDTH = 420;
+const CANVAS_HEIGHT = 594;
 
 // Initialize canvas
 function initCanvas() {
     canvas = new fabric.Canvas('canvas', {
-        width: 420,
-        height: 594,
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
         backgroundColor: '#FFFFFF',
         controlsAboveOverlay: true,
         preserveObjectStacking: true,
@@ -464,7 +525,7 @@ function debounce(func, wait) {
 function saveState() {
     if (pauseSaving) return;
 
-    const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape']));
+    const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']));
     if (previousJson !== json) {
         undoStack.push(json);
         previousJson = json;
@@ -516,7 +577,6 @@ function redo() {
             previousJson = nextState;
             pauseSaving = false;
             updateUndoRedoButtons();
-            setCanRedo(redoStack.length > 0);
             updateLayers();
         });
     }
@@ -557,6 +617,7 @@ function updatePropertiesPanel() {
     document.getElementById('corner-radius-section').classList.add('hidden');
     document.getElementById('image-variable-section').classList.add('hidden');
     document.getElementById('image-frame-section').classList.add('hidden');
+    document.getElementById('image-preview-section').classList.add('hidden');
 
     // Show relevant sections based on object type
     if (activeObject.fill !== undefined && activeObject.type !== 'image' && !activeObject.isFrame) {
@@ -595,6 +656,13 @@ function updatePropertiesPanel() {
         document.getElementById('image-frame-section').classList.remove('hidden');
         document.getElementById('image-variable-section').classList.remove('hidden');
         document.getElementById('image-variable').value = activeObject.variable || '';
+
+        // Show preview if image exists
+        if (activeObject.type === 'image' && activeObject.originalImageUrl) {
+            document.getElementById('image-preview-section').classList.remove('hidden');
+            document.getElementById('frame-image-preview').src = activeObject.originalImageUrl;
+            document.getElementById('crop-mode').value = activeObject.cropMode || 'cover';
+        }
     }
 
     // Regular image (not frame)
@@ -730,73 +798,248 @@ function addImageFrame(frameShape) {
     }
 }
 
-// Add image to frame
+// Add image to frame with crop mode
 function addImageToFrame(file) {
     if (!activeObject || !activeObject.isFrame) return;
 
     const reader = new FileReader();
     reader.onload = function(e) {
-        fabric.Image.fromURL(e.target.result, (img) => {
-            // Create a group with the frame and image
-            const frameBounds = activeObject.getBoundingRect();
+        const imageUrl = e.target.result;
+        const frameShape = activeObject.frameShape;
+        const frameProps = {
+            left: activeObject.left,
+            top: activeObject.top,
+            variable: activeObject.variable || '',
+        };
 
-            // Scale image to fit frame
-            let scale;
-            if (activeObject.frameShape === 'square') {
-                scale = Math.min(activeObject.width / img.width, activeObject.height / img.height);
-            } else if (activeObject.frameShape === 'circle') {
-                const diameter = activeObject.radius * 2;
-                scale = Math.min(diameter / img.width, diameter / img.height);
-            } else if (activeObject.frameShape === 'triangle') {
-                scale = Math.min(activeObject.width / img.width, activeObject.height / img.height);
-            }
+        // Get frame dimensions
+        let frameWidth, frameHeight;
+        if (frameShape === 'square') {
+            frameWidth = activeObject.width;
+            frameHeight = activeObject.height;
+        } else if (frameShape === 'circle') {
+            frameWidth = frameHeight = activeObject.radius * 2;
+        } else if (frameShape === 'triangle') {
+            frameWidth = activeObject.width;
+            frameHeight = activeObject.height;
+        }
 
-            img.scale(scale);
-
-            // Create clip path based on frame shape
-            let clipPath;
-            if (activeObject.frameShape === 'square') {
-                clipPath = new fabric.Rect({
-                    width: activeObject.width,
-                    height: activeObject.height,
-                    rx: activeObject.rx || 0,
-                    ry: activeObject.ry || 0,
-                    originX: 'center',
-                    originY: 'center',
-                });
-            } else if (activeObject.frameShape === 'circle') {
-                clipPath = new fabric.Circle({
-                    radius: activeObject.radius,
-                    originX: 'center',
-                    originY: 'center',
-                });
-            } else if (activeObject.frameShape === 'triangle') {
-                clipPath = new fabric.Triangle({
-                    width: activeObject.width,
-                    height: activeObject.height,
-                    originX: 'center',
-                    originY: 'center',
-                });
-            }
-
-            img.set({
-                clipPath: clipPath,
-                left: activeObject.left,
-                top: activeObject.top,
-                originX: 'center',
-                originY: 'center',
-                isFrame: true,
-                frameShape: activeObject.frameShape,
-                variable: activeObject.variable || '',
-            });
+        fabric.Image.fromURL(imageUrl, (img) => {
+            applyCropMode(img, frameShape, frameWidth, frameHeight, frameProps, 'cover', imageUrl);
 
             canvas.remove(activeObject);
             canvas.add(img);
             canvas.setActiveObject(img);
             canvas.renderAll();
+            saveState();
         });
     };
     reader.readAsDataURL(file);
+}
+
+// Apply crop mode to image
+function applyCropMode(img, frameShape, frameWidth, frameHeight, frameProps, cropMode, originalImageUrl) {
+    let scale = 1;
+
+    switch(cropMode) {
+        case 'cover':
+            // Image covers the entire frame
+            scale = Math.max(frameWidth / img.width, frameHeight / img.height);
+            break;
+        case 'contain':
+            // Image fits entirely within frame
+            scale = Math.min(frameWidth / img.width, frameHeight / img.height);
+            break;
+        case 'width':
+            // Width matches frame width
+            scale = frameWidth / img.width;
+            break;
+        case 'height':
+            // Height matches frame height
+            scale = frameHeight / img.height;
+            break;
+        case 'original':
+            // Keep original size
+            scale = 1;
+            break;
+    }
+
+    img.scale(scale);
+
+    // Create clip path based on frame shape
+    let clipPath;
+    if (frameShape === 'square') {
+        clipPath = new fabric.Rect({
+            width: frameWidth,
+            height: frameHeight,
+            rx: 0,
+            ry: 0,
+            originX: 'center',
+            originY: 'center',
+        });
+    } else if (frameShape === 'circle') {
+        clipPath = new fabric.Circle({
+            radius: frameWidth / 2,
+            originX: 'center',
+            originY: 'center',
+        });
+    } else if (frameShape === 'triangle') {
+        clipPath = new fabric.Triangle({
+            width: frameWidth,
+            height: frameHeight,
+            originX: 'center',
+            originY: 'center',
+        });
+    }
+
+    img.set({
+        clipPath: clipPath,
+        left: frameProps.left,
+        top: frameProps.top,
+        originX: 'center',
+        originY: 'center',
+        isFrame: true,
+        frameShape: frameShape,
+        cropMode: cropMode,
+        variable: frameProps.variable,
+        originalImageUrl: originalImageUrl,
+    });
+}
+
+// Change crop mode
+function changeCropMode(newMode) {
+    if (!activeObject || !activeObject.isFrame || !activeObject.originalImageUrl) return;
+
+    const frameShape = activeObject.frameShape;
+    const frameProps = {
+        left: activeObject.left,
+        top: activeObject.top,
+        variable: activeObject.variable || '',
+        angle: activeObject.angle,
+        scaleX: activeObject.scaleX,
+        scaleY: activeObject.scaleY,
+    };
+
+    let frameWidth, frameHeight;
+    if (frameShape === 'square') {
+        frameWidth = activeObject.width * activeObject.scaleX;
+        frameHeight = activeObject.height * activeObject.scaleY;
+    } else if (frameShape === 'circle') {
+        frameWidth = frameHeight = activeObject.radius * 2 * activeObject.scaleX;
+    } else if (frameShape === 'triangle') {
+        frameWidth = activeObject.width * activeObject.scaleX;
+        frameHeight = activeObject.height * activeObject.scaleY;
+    }
+
+    fabric.Image.fromURL(activeObject.originalImageUrl, (img) => {
+        applyCropMode(img, frameShape, frameWidth, frameHeight, frameProps, newMode, activeObject.originalImageUrl);
+
+        img.set({
+            angle: frameProps.angle,
+        });
+
+        const index = canvas.getObjects().indexOf(activeObject);
+        canvas.remove(activeObject);
+        canvas.insertAt(img, index);
+        canvas.setActiveObject(img);
+        canvas.renderAll();
+        saveState();
+    });
+}
+
+// Delete frame image
+function deleteFrameImage() {
+    if (!activeObject || !activeObject.isFrame) return;
+
+    const frameShape = activeObject.frameShape;
+    const frameProps = {
+        left: activeObject.left,
+        top: activeObject.top,
+        variable: activeObject.variable || '',
+    };
+
+    let newFrame;
+    const frameSize = 150;
+
+    switch(frameShape) {
+        case 'square':
+            newFrame = new fabric.Rect({
+                left: frameProps.left,
+                top: frameProps.top,
+                width: frameSize,
+                height: frameSize,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                rx: 0,
+                ry: 0,
+                isFrame: true,
+                frameShape: 'square',
+                variable: frameProps.variable,
+            });
+            break;
+        case 'circle':
+            newFrame = new fabric.Circle({
+                left: frameProps.left,
+                top: frameProps.top,
+                radius: frameSize / 2,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                isFrame: true,
+                frameShape: 'circle',
+                variable: frameProps.variable,
+            });
+            break;
+        case 'triangle':
+            newFrame = new fabric.Triangle({
+                left: frameProps.left,
+                top: frameProps.top,
+                width: frameSize,
+                height: frameSize,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                isFrame: true,
+                frameShape: 'triangle',
+                variable: frameProps.variable,
+            });
+            break;
+    }
+
+    if (newFrame) {
+        const index = canvas.getObjects().indexOf(activeObject);
+        canvas.remove(activeObject);
+        canvas.insertAt(newFrame, index);
+        canvas.setActiveObject(newFrame);
+        canvas.renderAll();
+        saveState();
+    }
+}
+
+// Copy object
+function copyObject() {
+    if (activeObject) {
+        activeObject.clone((cloned) => {
+            copiedObject = cloned;
+        }, ['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']);
+    }
+}
+
+// Paste object
+function pasteObject() {
+    if (copiedObject) {
+        copiedObject.clone((cloned) => {
+            cloned.set({
+                left: cloned.left + 10,
+                top: cloned.top + 10,
+            });
+            canvas.add(cloned);
+            copiedObject = cloned;
+            canvas.setActiveObject(cloned);
+            canvas.renderAll();
+        }, ['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']);
+    }
 }
 
 // Update layers list with drag and drop
@@ -819,24 +1062,29 @@ function updateLayers() {
         let icon = 'texture';
         let name = 'Objeto';
 
-        if (obj.isFrame) {
-            icon = 'image';
-            name = 'Moldura de Imagem';
-        } else if (obj.type === 'rect') {
-            icon = 'check_box_outline_blank';
-            name = 'Retângulo';
-        } else if (obj.type === 'circle') {
-            icon = 'circle';
-            name = 'Círculo';
-        } else if (obj.type === 'triangle') {
-            icon = 'change_history';
-            name = 'Triângulo';
-        } else if (obj.type === 'i-text' || obj.type === 'textbox') {
-            icon = 'title';
-            name = obj.text ? obj.text.substring(0, 20) : 'Texto';
-        } else if (obj.type === 'image') {
-            icon = 'image';
-            name = 'Imagem';
+        // Show variable name if exists
+        if (obj.variable) {
+            name = obj.variable;
+        } else {
+            if (obj.isFrame) {
+                icon = 'image';
+                name = 'Moldura de Imagem';
+            } else if (obj.type === 'rect') {
+                icon = 'check_box_outline_blank';
+                name = 'Retângulo';
+            } else if (obj.type === 'circle') {
+                icon = 'circle';
+                name = 'Círculo';
+            } else if (obj.type === 'triangle') {
+                icon = 'change_history';
+                name = 'Triângulo';
+            } else if (obj.type === 'i-text' || obj.type === 'textbox') {
+                icon = 'title';
+                name = obj.text ? obj.text.substring(0, 20) : 'Texto';
+            } else if (obj.type === 'image') {
+                icon = 'image';
+                name = 'Imagem';
+            }
         }
 
         layerItem.className = `layer-item flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${isActive ? 'active' : ''}`;
@@ -917,25 +1165,21 @@ function zoomIn() {
 }
 
 function zoomOut() {
-    zoomLevel = Math.max(zoomLevel - 0.1, 0.1);
+    zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
     applyZoom();
 }
 
 function applyZoom() {
-    const canvasContainer = document.getElementById('canvas-container');
     canvas.setZoom(zoomLevel);
-
-    // Update canvas display size
-    canvasContainer.style.transform = `scale(${zoomLevel})`;
-    canvasContainer.style.transformOrigin = 'center';
-
+    canvas.setWidth(CANVAS_WIDTH * zoomLevel);
+    canvas.setHeight(CANVAS_HEIGHT * zoomLevel);
     document.getElementById('zoom-level').textContent = Math.round(zoomLevel * 100) + '%';
 }
 
 // Save to localStorage with custom properties
 function saveToLocalStorage() {
     try {
-        const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape']));
+        const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']));
         localStorage.setItem('ebookify-canvas', json);
         localStorage.setItem('ebookify-canvas-backup', json); // Backup
         alert('Rascunho salvo com sucesso!');
@@ -1030,6 +1274,16 @@ function setupEventListeners() {
         }
     });
 
+    // Crop mode change
+    document.getElementById('crop-mode').addEventListener('change', (e) => {
+        changeCropMode(e.target.value);
+    });
+
+    // Delete frame image
+    document.getElementById('delete-frame-image-btn').addEventListener('click', () => {
+        deleteFrameImage();
+    });
+
     // Close modals on background click
     document.querySelectorAll('.modal').forEach(modal => {
         modal.addEventListener('click', (e) => {
@@ -1053,7 +1307,13 @@ function setupEventListeners() {
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'z' && !e.shiftKey) {
+            if (e.key === 'c' || e.key === 'C') {
+                e.preventDefault();
+                copyObject();
+            } else if (e.key === 'v' || e.key === 'V') {
+                e.preventDefault();
+                pasteObject();
+            } else if (e.key === 'z' && !e.shiftKey) {
                 e.preventDefault();
                 undo();
             } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
@@ -1092,6 +1352,7 @@ function setupEventListeners() {
             activeObject.variable = e.target.value;
             canvas.renderAll();
             saveState();
+            updateLayers();
         }
     });
 
@@ -1101,6 +1362,7 @@ function setupEventListeners() {
             activeObject.variable = e.target.value;
             canvas.renderAll();
             saveState();
+            updateLayers();
         }
     });
 
@@ -1265,7 +1527,7 @@ function setupEventListeners() {
                 canvas.add(cloned);
                 canvas.setActiveObject(cloned);
                 canvas.renderAll();
-            }, ['variable', 'isFrame', 'frameShape']);
+            }, ['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']);
         }
     });
 
