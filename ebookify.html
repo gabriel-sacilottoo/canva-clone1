@@ -257,13 +257,25 @@
 
 <!-- Image Frame Section -->
 <div id="image-frame-section" class="hidden">
-<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Adicionar Imagem à Moldura</label>
+<!-- Aspect Ratio -->
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Proporções</label>
+<select id="aspect-ratio" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="none">Nenhuma</option>
+<option value="1:1">1:1 (Quadrado)</option>
+<option value="16:9">16:9 (Widescreen)</option>
+<option value="4:3">4:3 (Padrão)</option>
+<option value="21:9">21:9 (Ultrawide)</option>
+<option value="9:16">9:16 (Vertical)</option>
+<option value="3:4">3:4 (Retrato)</option>
+</select>
+
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary mt-3">Adicionar Imagem à Moldura</label>
 <button id="add-image-to-frame-btn" class="w-full bg-primary text-white p-2 rounded hover:bg-primary/90 mt-1 flex items-center justify-center gap-2">
 <span class="material-symbols-outlined text-sm">upload</span>
                         Selecionar Imagem
                     </button>
 
-<!-- Image Preview and Crop Options -->
+<!-- Image Preview -->
 <div id="image-preview-section" class="hidden mt-3">
 <div class="image-preview-container">
 <img id="frame-image-preview" src="" alt="Preview"/>
@@ -271,15 +283,6 @@
 <span class="material-symbols-outlined text-lg">delete</span>
 </div>
 </div>
-
-<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary mt-3">Recorte</label>
-<select id="crop-mode" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
-<option value="cover">Cobrir</option>
-<option value="contain">Conter</option>
-<option value="width">Largura</option>
-<option value="height">Altura</option>
-<option value="original">Manter tamanho</option>
-</select>
 </div>
 </div>
 
@@ -476,6 +479,17 @@ let copiedObject = null;
 const CANVAS_WIDTH = 420;
 const CANVAS_HEIGHT = 594;
 
+// Aspect ratio presets
+const ASPECT_RATIOS = {
+    'none': null,
+    '1:1': 1,
+    '16:9': 16/9,
+    '4:3': 4/3,
+    '21:9': 21/9,
+    '9:16': 9/16,
+    '3:4': 3/4,
+};
+
 // Initialize canvas
 function initCanvas() {
     canvas = new fabric.Canvas('canvas', {
@@ -525,7 +539,7 @@ function debounce(func, wait) {
 function saveState() {
     if (pauseSaving) return;
 
-    const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']));
+    const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']));
     if (previousJson !== json) {
         undoStack.push(json);
         previousJson = json;
@@ -656,12 +670,12 @@ function updatePropertiesPanel() {
         document.getElementById('image-frame-section').classList.remove('hidden');
         document.getElementById('image-variable-section').classList.remove('hidden');
         document.getElementById('image-variable').value = activeObject.variable || '';
+        document.getElementById('aspect-ratio').value = activeObject.aspectRatio || 'none';
 
         // Show preview if image exists
         if (activeObject.type === 'image' && activeObject.originalImageUrl) {
             document.getElementById('image-preview-section').classList.remove('hidden');
             document.getElementById('frame-image-preview').src = activeObject.originalImageUrl;
-            document.getElementById('crop-mode').value = activeObject.cropMode || 'cover';
         }
     }
 
@@ -759,6 +773,7 @@ function addImageFrame(frameShape) {
                 ry: 0,
                 isFrame: true,
                 frameShape: 'square',
+                aspectRatio: 'none',
                 variable: '',
             });
             break;
@@ -772,6 +787,7 @@ function addImageFrame(frameShape) {
                 strokeWidth: 2,
                 isFrame: true,
                 frameShape: 'circle',
+                aspectRatio: 'none',
                 variable: '',
             });
             break;
@@ -786,6 +802,7 @@ function addImageFrame(frameShape) {
                 strokeWidth: 2,
                 isFrame: true,
                 frameShape: 'triangle',
+                aspectRatio: 'none',
                 variable: '',
             });
             break;
@@ -798,22 +815,24 @@ function addImageFrame(frameShape) {
     }
 }
 
-// Add image to frame with crop mode
+// Add image to frame
 function addImageToFrame(file) {
     if (!activeObject || !activeObject.isFrame) return;
 
     const reader = new FileReader();
     reader.onload = function(e) {
         const imageUrl = e.target.result;
-        const frameShape = activeObject.frameShape;
         const frameProps = {
             left: activeObject.left,
             top: activeObject.top,
             variable: activeObject.variable || '',
+            aspectRatio: activeObject.aspectRatio || 'none',
         };
 
         // Get frame dimensions
         let frameWidth, frameHeight;
+        const frameShape = activeObject.frameShape || 'square';
+
         if (frameShape === 'square') {
             frameWidth = activeObject.width;
             frameHeight = activeObject.height;
@@ -825,7 +844,7 @@ function addImageToFrame(file) {
         }
 
         fabric.Image.fromURL(imageUrl, (img) => {
-            applyCropMode(img, frameShape, frameWidth, frameHeight, frameProps, 'cover', imageUrl);
+            applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frameProps, imageUrl);
 
             canvas.remove(activeObject);
             canvas.add(img);
@@ -837,33 +856,10 @@ function addImageToFrame(file) {
     reader.readAsDataURL(file);
 }
 
-// Apply crop mode to image
-function applyCropMode(img, frameShape, frameWidth, frameHeight, frameProps, cropMode, originalImageUrl) {
-    let scale = 1;
-
-    switch(cropMode) {
-        case 'cover':
-            // Image covers the entire frame
-            scale = Math.max(frameWidth / img.width, frameHeight / img.height);
-            break;
-        case 'contain':
-            // Image fits entirely within frame
-            scale = Math.min(frameWidth / img.width, frameHeight / img.height);
-            break;
-        case 'width':
-            // Width matches frame width
-            scale = frameWidth / img.width;
-            break;
-        case 'height':
-            // Height matches frame height
-            scale = frameHeight / img.height;
-            break;
-        case 'original':
-            // Keep original size
-            scale = 1;
-            break;
-    }
-
+// Apply aspect ratio to frame
+function applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frameProps, originalImageUrl) {
+    // Image always uses contain mode (appears complete)
+    const scale = Math.min(frameWidth / img.width, frameHeight / img.height);
     img.scale(scale);
 
     // Create clip path based on frame shape
@@ -900,43 +896,113 @@ function applyCropMode(img, frameShape, frameWidth, frameHeight, frameProps, cro
         originY: 'center',
         isFrame: true,
         frameShape: frameShape,
-        cropMode: cropMode,
+        aspectRatio: frameProps.aspectRatio,
         variable: frameProps.variable,
         originalImageUrl: originalImageUrl,
     });
 }
 
-// Change crop mode
-function changeCropMode(newMode) {
-    if (!activeObject || !activeObject.isFrame || !activeObject.originalImageUrl) return;
+// Change aspect ratio
+function changeAspectRatio(newRatio) {
+    if (!activeObject || !activeObject.isFrame) return;
 
-    const frameShape = activeObject.frameShape;
+    const baseSize = 200;
+    let newWidth, newHeight;
+
+    // Calculate new dimensions based on aspect ratio
+    if (newRatio === 'none') {
+        // Keep current shape
+        if (activeObject.originalImageUrl) {
+            // Reload with current shape
+            reloadFrameImage(activeObject.frameShape);
+        } else {
+            // Just update the property
+            activeObject.aspectRatio = newRatio;
+            saveState();
+        }
+        return;
+    }
+
+    // Convert to rectangular frame with aspect ratio
+    const ratio = ASPECT_RATIOS[newRatio];
+    if (ratio >= 1) {
+        newWidth = baseSize;
+        newHeight = baseSize / ratio;
+    } else {
+        newHeight = baseSize;
+        newWidth = baseSize * ratio;
+    }
+
     const frameProps = {
         left: activeObject.left,
         top: activeObject.top,
         variable: activeObject.variable || '',
-        angle: activeObject.angle,
-        scaleX: activeObject.scaleX,
-        scaleY: activeObject.scaleY,
+        aspectRatio: newRatio,
     };
 
+    if (activeObject.originalImageUrl) {
+        // Reload image with new frame
+        fabric.Image.fromURL(activeObject.originalImageUrl, (img) => {
+            applyAspectRatioToFrame(img, 'square', newWidth, newHeight, frameProps, activeObject.originalImageUrl);
+
+            const index = canvas.getObjects().indexOf(activeObject);
+            canvas.remove(activeObject);
+            canvas.insertAt(img, index);
+            canvas.setActiveObject(img);
+            canvas.renderAll();
+            saveState();
+        });
+    } else {
+        // Create new rectangular frame
+        const newFrame = new fabric.Rect({
+            left: frameProps.left,
+            top: frameProps.top,
+            width: newWidth,
+            height: newHeight,
+            fill: '#E5E7EB',
+            stroke: '#9CA3AF',
+            strokeWidth: 2,
+            rx: 0,
+            ry: 0,
+            isFrame: true,
+            frameShape: 'square',
+            aspectRatio: newRatio,
+            variable: frameProps.variable,
+        });
+
+        const index = canvas.getObjects().indexOf(activeObject);
+        canvas.remove(activeObject);
+        canvas.insertAt(newFrame, index);
+        canvas.setActiveObject(newFrame);
+        canvas.renderAll();
+        saveState();
+    }
+}
+
+// Reload frame image (when changing back to 'none')
+function reloadFrameImage(shape) {
+    if (!activeObject || !activeObject.originalImageUrl) return;
+
+    const frameProps = {
+        left: activeObject.left,
+        top: activeObject.top,
+        variable: activeObject.variable || '',
+        aspectRatio: 'none',
+    };
+
+    const frameSize = 150;
     let frameWidth, frameHeight;
-    if (frameShape === 'square') {
-        frameWidth = activeObject.width * activeObject.scaleX;
-        frameHeight = activeObject.height * activeObject.scaleY;
-    } else if (frameShape === 'circle') {
-        frameWidth = frameHeight = activeObject.radius * 2 * activeObject.scaleX;
-    } else if (frameShape === 'triangle') {
-        frameWidth = activeObject.width * activeObject.scaleX;
-        frameHeight = activeObject.height * activeObject.scaleY;
+
+    if (shape === 'square') {
+        frameWidth = frameHeight = frameSize;
+    } else if (shape === 'circle') {
+        frameWidth = frameHeight = frameSize;
+    } else if (shape === 'triangle') {
+        frameWidth = frameHeight = frameSize;
     }
 
     fabric.Image.fromURL(activeObject.originalImageUrl, (img) => {
-        applyCropMode(img, frameShape, frameWidth, frameHeight, frameProps, newMode, activeObject.originalImageUrl);
-
-        img.set({
-            angle: frameProps.angle,
-        });
+        applyAspectRatioToFrame(img, shape, frameWidth, frameHeight, frameProps, activeObject.originalImageUrl);
 
         const index = canvas.getObjects().indexOf(activeObject);
         canvas.remove(activeObject);
@@ -951,7 +1017,8 @@ function changeCropMode(newMode) {
 function deleteFrameImage() {
     if (!activeObject || !activeObject.isFrame) return;
 
-    const frameShape = activeObject.frameShape;
+    const frameShape = activeObject.frameShape || 'square';
+    const aspectRatio = activeObject.aspectRatio || 'none';
     const frameProps = {
         left: activeObject.left,
         top: activeObject.top,
@@ -961,50 +1028,84 @@ function deleteFrameImage() {
     let newFrame;
     const frameSize = 150;
 
-    switch(frameShape) {
-        case 'square':
-            newFrame = new fabric.Rect({
-                left: frameProps.left,
-                top: frameProps.top,
-                width: frameSize,
-                height: frameSize,
-                fill: '#E5E7EB',
-                stroke: '#9CA3AF',
-                strokeWidth: 2,
-                rx: 0,
-                ry: 0,
-                isFrame: true,
-                frameShape: 'square',
-                variable: frameProps.variable,
-            });
-            break;
-        case 'circle':
-            newFrame = new fabric.Circle({
-                left: frameProps.left,
-                top: frameProps.top,
-                radius: frameSize / 2,
-                fill: '#E5E7EB',
-                stroke: '#9CA3AF',
-                strokeWidth: 2,
-                isFrame: true,
-                frameShape: 'circle',
-                variable: frameProps.variable,
-            });
-            break;
-        case 'triangle':
-            newFrame = new fabric.Triangle({
-                left: frameProps.left,
-                top: frameProps.top,
-                width: frameSize,
-                height: frameSize,
-                fill: '#E5E7EB',
-                stroke: '#9CA3AF',
-                strokeWidth: 2,
-                isFrame: true,
-                frameShape: 'triangle',
-                variable: frameProps.variable,
-            });
-            break;
+    if (aspectRatio !== 'none') {
+        // Create rectangular frame with aspect ratio
+        const ratio = ASPECT_RATIOS[aspectRatio];
+        let width, height;
+
+        if (ratio >= 1) {
+            width = 200;
+            height = 200 / ratio;
+        } else {
+            height = 200;
+            width = 200 * ratio;
+        }
+
+        newFrame = new fabric.Rect({
+            left: frameProps.left,
+            top: frameProps.top,
+            width: width,
+            height: height,
+            fill: '#E5E7EB',
+            stroke: '#9CA3AF',
+            strokeWidth: 2,
+            rx: 0,
+            ry: 0,
+            isFrame: true,
+            frameShape: 'square',
+            aspectRatio: aspectRatio,
+            variable: frameProps.variable,
+        });
+    } else {
+        // Create frame based on original shape
+        switch(frameShape) {
+            case 'square':
+                newFrame = new fabric.Rect({
+                    left: frameProps.left,
+                    top: frameProps.top,
+                    width: frameSize,
+                    height: frameSize,
+                    fill: '#E5E7EB',
+                    stroke: '#9CA3AF',
+                    strokeWidth: 2,
+                    rx: 0,
+                    ry: 0,
+                    isFrame: true,
+                    frameShape: 'square',
+                    aspectRatio: 'none',
+                    variable: frameProps.variable,
+                });
+                break;
+            case 'circle':
+                newFrame = new fabric.Circle({
+                    left: frameProps.left,
+                    top: frameProps.top,
+                    radius: frameSize / 2,
+                    fill: '#E5E7EB',
+                    stroke: '#9CA3AF',
+                    strokeWidth: 2,
+                    isFrame: true,
+                    frameShape: 'circle',
+                    aspectRatio: 'none',
+                    variable: frameProps.variable,
+                });
+                break;
+            case 'triangle':
+                newFrame = new fabric.Triangle({
+                    left: frameProps.left,
+                    top: frameProps.top,
+                    width: frameSize,
+                    height: frameSize,
+                    fill: '#E5E7EB',
+                    stroke: '#9CA3AF',
+                    strokeWidth: 2,
+                    isFrame: true,
+                    frameShape: 'triangle',
+                    aspectRatio: 'none',
+                    variable: frameProps.variable,
+                });
+                break;
+        }
     }
 
     if (newFrame) {
@@ -1022,7 +1123,7 @@ function copyObject() {
     if (activeObject) {
         activeObject.clone((cloned) => {
             copiedObject = cloned;
-        }, ['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']);
+        }, ['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']);
     }
 }
 
@@ -1038,7 +1139,7 @@ function pasteObject() {
             copiedObject = cloned;
             canvas.setActiveObject(cloned);
             canvas.renderAll();
-        }, ['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']);
+        }, ['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']);
     }
 }
 
@@ -1179,7 +1280,7 @@ function applyZoom() {
 // Save to localStorage with custom properties
 function saveToLocalStorage() {
     try {
-        const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']));
+        const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']));
         localStorage.setItem('ebookify-canvas', json);
         localStorage.setItem('ebookify-canvas-backup', json); // Backup
         alert('Rascunho salvo com sucesso!');
@@ -1274,9 +1375,9 @@ function setupEventListeners() {
         }
     });
 
-    // Crop mode change
-    document.getElementById('crop-mode').addEventListener('change', (e) => {
-        changeCropMode(e.target.value);
+    // Aspect ratio change
+    document.getElementById('aspect-ratio').addEventListener('change', (e) => {
+        changeAspectRatio(e.target.value);
     });
 
     // Delete frame image
@@ -1527,7 +1628,7 @@ function setupEventListeners() {
                 canvas.add(cloned);
                 canvas.setActiveObject(cloned);
                 canvas.renderAll();
-            }, ['variable', 'isFrame', 'frameShape', 'cropMode', 'originalImageUrl']);
+            }, ['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']);
         }
     });
 
