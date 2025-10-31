@@ -50,13 +50,22 @@
             background: rgba(255, 255, 255, 0.5);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
         }
         .dark .glas {
-            background: rgba(55, 65, 81, 0.5);backdrop-filter: blur(10px);
+            background: rgba(55, 65, 81, 0.5);
+            backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         .layer-item {
-            cursor: pointer;
+            cursor: grab;
+        }
+        .layer-item:active {
+            cursor: grabbing;
         }
         .layer-item.active {
             background: rgba(16, 185, 129, 0.1);
@@ -64,10 +73,49 @@
         .dark .layer-item.active {
             background: rgba(16, 185, 129, 0.2);
         }
+        .layer-item.dragging {
+            opacity: 0.5;
+        }
+        .layer-item.drag-over {
+            border-top: 2px solid #10B981;
+        }
         #canvas-container {
             display: flex;
             justify-content: center;
             align-items: center;
+        }
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .dark .modal-content {
+            background-color: #374151;
+        }
+        .shape-option {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .shape-option:hover {
+            transform: scale(1.05);
         }
     </style>
 </head>
@@ -82,10 +130,6 @@
 <button id="save-draft-btn" class="bg-secondary text-white font-bold py-2 px-4 rounded-lg shadow-soft hover:brightness-105 transition-all flex items-center justify-center gap-2 text-sm">
 <span class="material-symbols-outlined text-base">save</span>
                     Salvar rascunho
-                </button>
-<button id="import-layers-btn" class="bg-secondary/20 text-secondary dark:bg-secondary/30 dark:text-secondary-300 font-bold py-2 px-4 rounded-lg shadow-soft hover:bg-secondary/30 dark:hover:bg-secondary/40 transition-all flex items-center justify-center gap-2 text-sm">
-<span class="material-symbols-outlined text-base">upload_file</span>
-                    Importar Camadas
                 </button>
 <button class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
 <span class="material-symbols-outlined">help</span>
@@ -120,41 +164,17 @@
                     Visualizar E-book
                 </button>
 </aside>
-<main class="flex-1 bg-background-light dark:bg-background-dark p-8 overflow-auto flex flex-col items-center">
+<main class="flex-1 bg-background-light dark:bg-background-dark p-8 overflow-auto flex flex-col items-center" style="padding-bottom: 120px;">
 <div class="w-full max-w-4xl mx-auto flex-1 flex flex-col items-center justify-center">
 <div id="canvas-container" class="bg-white dark:bg-gray-800 rounded-lg shadow-soft-lg" style="box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 10px 38px -10px rgba(0,0,0,0.1), 0 10px 20px -15px rgba(0,0,0,0.1);">
 <canvas id="canvas"></canvas>
 </div>
-</div>
-<div class="glas rounded-full shadow-soft-lg p-2 mt-8 flex items-center gap-2">
-<button id="zoom-out-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
-<span class="material-symbols-outlined">zoom_out</span>
-</button>
-<span id="zoom-level" class="text-sm font-medium w-16 text-center">100%</span>
-<button id="zoom-in-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
-<span class="material-symbols-outlined">zoom_in</span>
-</button>
-<div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2"></div>
-<button id="undo-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
-<span class="material-symbols-outlined">undo</span>
-</button>
-<button id="redo-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
-<span class="material-symbols-outlined">redo</span>
-</button>
 </div>
 </main>
 <aside class="w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-surface-dark p-6 flex flex-col gap-6 overflow-y-auto">
 <div>
 <h2 class="text-sm font-bold font-display uppercase tracking-wider text-text-light-secondary dark:text-dark-secondary mb-4">Propriedades da Página</h2>
 <div class="space-y-4">
-<div>
-<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary" for="canvas-width">Dimensões (px)</label>
-<div class="flex items-center gap-2 mt-1">
-<input id="canvas-width" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary" type="number" value="420"/>
-<span class="text-gray-400">×</span>
-<input id="canvas-height" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary" type="number" value="594"/>
-</div>
-</div>
 <div>
 <label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary" for="bg-color">Cor de Fundo</label>
 <div class="flex items-center gap-2 mt-1">
@@ -169,6 +189,44 @@
 <div id="object-properties" class="hidden">
 <h2 class="text-sm font-bold font-display uppercase tracking-wider text-text-light-secondary dark:text-dark-secondary mb-4">Propriedades do Objeto</h2>
 <div class="space-y-4">
+
+<!-- Variable Field for Text -->
+<div id="text-variable-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Variável</label>
+<select id="text-variable" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="">Nenhuma</option>
+<option value="Capitulo">Capitulo</option>
+<option value="Titulo">Titulo</option>
+<option value="Subtitulo">Subtitulo</option>
+<option value="Topico">Topico</option>
+<option value="Texto">Texto</option>
+<option value="Texto2">Texto2</option>
+<option value="Texto3">Texto3</option>
+</select>
+</div>
+
+<!-- Variable Field for Image -->
+<div id="image-variable-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Variável</label>
+<select id="image-variable" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="">Nenhuma</option>
+<option value="Imagem">Imagem</option>
+<option value="Imagem2">Imagem2</option>
+<option value="Icone">Icone</option>
+<option value="Icone2">Icone2</option>
+<option value="Icone3">Icone3</option>
+</select>
+</div>
+
+<!-- Image Frame Section -->
+<div id="image-frame-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Adicionar Imagem à Moldura</label>
+<button id="add-image-to-frame-btn" class="w-full bg-primary text-white p-2 rounded hover:bg-primary/90 mt-1 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">upload</span>
+                        Selecionar Imagem
+                    </button>
+</div>
+
 <!-- Fill Color -->
 <div id="fill-color-section" class="hidden">
 <label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Cor de Preenchimento</label>
@@ -262,12 +320,89 @@
 </div>
 </aside>
 </div>
+
+<!-- Zoom and Undo/Redo Controls (Fixed Position) -->
+<div class="glas rounded-full shadow-soft-lg p-2 flex items-center gap-2">
+<button id="zoom-out-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">zoom_out</span>
+</button>
+<span id="zoom-level" class="text-sm font-medium w-16 text-center">100%</span>
+<button id="zoom-in-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">zoom_in</span>
+</button>
+<div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2"></div>
+<button id="undo-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">undo</span>
+</button>
+<button id="redo-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">redo</span>
+</button>
+</div>
+</div>
+
+<!-- Shape Selection Modal -->
+<div id="shape-modal" class="modal">
+<div class="modal-content">
+<h2 class="text-xl font-display font-bold mb-4">Selecione uma Forma</h2>
+<div class="grid grid-cols-3 gap-4">
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-shape="rectangle">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-12 bg-primary rounded"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Retângulo</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-shape="circle">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-16 bg-secondary rounded-full"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Círculo</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-shape="triangle">
+<div class="w-full h-24 flex items-center justify-center">
+<div style="width: 0; height: 0; border-left: 32px solid transparent; border-right: 32px solid transparent; border-bottom: 56px solid #FB7185;"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Triângulo</p>
+</div>
+</div>
+<button id="close-shape-modal" class="mt-4 w-full bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-white p-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                Cancelar
+            </button>
+</div>
+</div>
+
+<!-- Image Frame Modal -->
+<div id="image-frame-modal" class="modal">
+<div class="modal-content">
+<h2 class="text-xl font-display font-bold mb-4">Selecione o Formato da Moldura</h2>
+<div class="grid grid-cols-3 gap-4">
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-frame="square">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-16 bg-gray-400 rounded"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Quadrado</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-frame="circle">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-16 bg-gray-400 rounded-full"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Círculo</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-frame="triangle">
+<div class="w-full h-24 flex items-center justify-center">
+<div style="width: 0; height: 0; border-left: 32px solid transparent; border-right: 32px solid transparent; border-bottom: 56px solid #9CA3AF;"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Triângulo</p>
+</div>
+</div>
+<button id="close-frame-modal" class="mt-4 w-full bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-white p-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                Cancelar
+            </button>
+</div>
 </div>
 
 <!-- Hidden file input for image upload -->
 <input type="file" id="image-upload" accept="image/*" style="display: none;">
-<!-- Hidden file input for JSON import -->
-<input type="file" id="json-import" accept=".json,application/json" style="display: none;">
+<input type="file" id="frame-image-upload" accept="image/*" style="display: none;">
 
 <script>
 // Global variables
@@ -278,6 +413,7 @@ let pauseSaving = false;
 let previousJson = null;
 let zoomLevel = 1;
 let activeObject = null;
+let draggedLayerIndex = null;
 
 // Initialize canvas
 function initCanvas() {
@@ -289,13 +425,19 @@ function initCanvas() {
         preserveObjectStacking: true,
     });
 
-    // Event listeners
+    // Event listeners for undo/redo - capture more granular changes
     canvas.on('selection:created', updateSelection);
     canvas.on('selection:updated', updateSelection);
     canvas.on('selection:cleared', clearSelection);
     canvas.on('object:modified', saveState);
     canvas.on('object:added', saveState);
     canvas.on('object:removed', saveState);
+
+    // Additional granular events for better undo/redo
+    canvas.on('object:moving', debounce(saveState, 300));
+    canvas.on('object:scaling', debounce(saveState, 300));
+    canvas.on('object:rotating', debounce(saveState, 300));
+    canvas.on('text:changed', debounce(saveState, 500));
 
     // Load from localStorage if exists
     loadFromLocalStorage();
@@ -305,18 +447,31 @@ function initCanvas() {
     updateLayers();
 }
 
-// Save state for undo/redo
+// Debounce function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Save state for undo/redo with custom properties
 function saveState() {
     if (pauseSaving) return;
 
-    const json = JSON.stringify(canvas.toJSON());
+    const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape']));
     if (previousJson !== json) {
         undoStack.push(json);
         previousJson = json;
         redoStack = [];
 
-        // Keep stack size manageable
-        if (undoStack.length > 50) {
+        // Keep stack size manageable - increased to 200 for better undo/redo
+        if (undoStack.length > 200) {
             undoStack.shift();
         }
 
@@ -361,6 +516,7 @@ function redo() {
             previousJson = nextState;
             pauseSaving = false;
             updateUndoRedoButtons();
+            setCanRedo(redoStack.length > 0);
             updateLayers();
         });
     }
@@ -397,17 +553,20 @@ function updatePropertiesPanel() {
     document.getElementById('fill-color-section').classList.add('hidden');
     document.getElementById('stroke-section').classList.add('hidden');
     document.getElementById('text-section').classList.add('hidden');
+    document.getElementById('text-variable-section').classList.add('hidden');
     document.getElementById('corner-radius-section').classList.add('hidden');
+    document.getElementById('image-variable-section').classList.add('hidden');
+    document.getElementById('image-frame-section').classList.add('hidden');
 
     // Show relevant sections based on object type
-    if (activeObject.fill !== undefined && activeObject.type !== 'image') {
+    if (activeObject.fill !== undefined && activeObject.type !== 'image' && !activeObject.isFrame) {
         document.getElementById('fill-color-section').classList.remove('hidden');
         const fillColor = activeObject.fill || '#000000';
         document.getElementById('fill-color').value = fillColor;
         document.getElementById('fill-color-preview').value = fillColor;
     }
 
-    if (activeObject.stroke !== undefined && activeObject.type !== 'image') {
+    if (activeObject.stroke !== undefined && activeObject.type !== 'image' && !activeObject.isFrame) {
         document.getElementById('stroke-section').classList.remove('hidden');
         const strokeColor = activeObject.stroke || '#000000';
         document.getElementById('stroke-color').value = strokeColor;
@@ -418,15 +577,30 @@ function updatePropertiesPanel() {
 
     if (activeObject.type === 'i-text' || activeObject.type === 'textbox') {
         document.getElementById('text-section').classList.remove('hidden');
+        document.getElementById('text-variable-section').classList.remove('hidden');
         document.getElementById('font-size').value = activeObject.fontSize || 24;
         document.getElementById('font-size-value').textContent = (activeObject.fontSize || 24) + 'px';
         document.getElementById('font-family').value = activeObject.fontFamily || 'Arial';
+        document.getElementById('text-variable').value = activeObject.variable || '';
     }
 
-    if (activeObject.type === 'rect') {
+    if (activeObject.type === 'rect' && !activeObject.isFrame) {
         document.getElementById('corner-radius-section').classList.remove('hidden');
         document.getElementById('corner-radius').value = activeObject.rx || 0;
         document.getElementById('corner-radius-value').textContent = (activeObject.rx || 0) + 'px';
+    }
+
+    // Image frame
+    if (activeObject.isFrame) {
+        document.getElementById('image-frame-section').classList.remove('hidden');
+        document.getElementById('image-variable-section').classList.remove('hidden');
+        document.getElementById('image-variable').value = activeObject.variable || '';
+    }
+
+    // Regular image (not frame)
+    if (activeObject.type === 'image' && !activeObject.isFrame) {
+        document.getElementById('image-variable-section').classList.remove('hidden');
+        document.getElementById('image-variable').value = activeObject.variable || '';
     }
 
     // Opacity
@@ -490,6 +664,7 @@ function addText() {
         fontFamily: 'Poppins',
         fill: '#111827',
         fontSize: 24,
+        variable: '',
     });
 
     canvas.add(text);
@@ -497,16 +672,125 @@ function addText() {
     canvas.renderAll();
 }
 
-// Add image
-function addImage(file) {
+// Add image frame
+function addImageFrame(frameShape) {
+    let frame;
+    const frameSize = 150;
+
+    switch(frameShape) {
+        case 'square':
+            frame = new fabric.Rect({
+                left: 100,
+                top: 100,
+                width: frameSize,
+                height: frameSize,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                rx: 0,
+                ry: 0,
+                isFrame: true,
+                frameShape: 'square',
+                variable: '',
+            });
+            break;
+        case 'circle':
+            frame = new fabric.Circle({
+                left: 100,
+                top: 100,
+                radius: frameSize / 2,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                isFrame: true,
+                frameShape: 'circle',
+                variable: '',
+            });
+            break;
+        case 'triangle':
+            frame = new fabric.Triangle({
+                left: 100,
+                top: 100,
+                width: frameSize,
+                height: frameSize,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                isFrame: true,
+                frameShape: 'triangle',
+                variable: '',
+            });
+            break;
+    }
+
+    if (frame) {
+        canvas.add(frame);
+        canvas.setActiveObject(frame);
+        canvas.renderAll();
+    }
+}
+
+// Add image to frame
+function addImageToFrame(file) {
+    if (!activeObject || !activeObject.isFrame) return;
+
     const reader = new FileReader();
     reader.onload = function(e) {
         fabric.Image.fromURL(e.target.result, (img) => {
-            img.scale(0.5);
+            // Create a group with the frame and image
+            const frameBounds = activeObject.getBoundingRect();
+
+            // Scale image to fit frame
+            let scale;
+            if (activeObject.frameShape === 'square') {
+                scale = Math.min(activeObject.width / img.width, activeObject.height / img.height);
+            } else if (activeObject.frameShape === 'circle') {
+                const diameter = activeObject.radius * 2;
+                scale = Math.min(diameter / img.width, diameter / img.height);
+            } else if (activeObject.frameShape === 'triangle') {
+                scale = Math.min(activeObject.width / img.width, activeObject.height / img.height);
+            }
+
+            img.scale(scale);
+
+            // Create clip path based on frame shape
+            let clipPath;
+            if (activeObject.frameShape === 'square') {
+                clipPath = new fabric.Rect({
+                    width: activeObject.width,
+                    height: activeObject.height,
+                    rx: activeObject.rx || 0,
+                    ry: activeObject.ry || 0,
+                    originX: 'center',
+                    originY: 'center',
+                });
+            } else if (activeObject.frameShape === 'circle') {
+                clipPath = new fabric.Circle({
+                    radius: activeObject.radius,
+                    originX: 'center',
+                    originY: 'center',
+                });
+            } else if (activeObject.frameShape === 'triangle') {
+                clipPath = new fabric.Triangle({
+                    width: activeObject.width,
+                    height: activeObject.height,
+                    originX: 'center',
+                    originY: 'center',
+                });
+            }
+
             img.set({
-                left: 100,
-                top: 100,
+                clipPath: clipPath,
+                left: activeObject.left,
+                top: activeObject.top,
+                originX: 'center',
+                originY: 'center',
+                isFrame: true,
+                frameShape: activeObject.frameShape,
+                variable: activeObject.variable || '',
             });
+
+            canvas.remove(activeObject);
             canvas.add(img);
             canvas.setActiveObject(img);
             canvas.renderAll();
@@ -515,7 +799,7 @@ function addImage(file) {
     reader.readAsDataURL(file);
 }
 
-// Update layers list
+// Update layers list with drag and drop
 function updateLayers() {
     const layersList = document.getElementById('layers-list');
     layersList.innerHTML = '';
@@ -527,7 +811,7 @@ function updateLayers() {
         return;
     }
 
-    objects.reverse().forEach((obj, index) => {
+    objects.slice().reverse().forEach((obj, index) => {
         const layerItem = document.createElement('div');
         const actualIndex = objects.length - 1 - index;
         const isActive = activeObject === obj;
@@ -535,7 +819,10 @@ function updateLayers() {
         let icon = 'texture';
         let name = 'Objeto';
 
-        if (obj.type === 'rect') {
+        if (obj.isFrame) {
+            icon = 'image';
+            name = 'Moldura de Imagem';
+        } else if (obj.type === 'rect') {
             icon = 'check_box_outline_blank';
             name = 'Retângulo';
         } else if (obj.type === 'circle') {
@@ -553,16 +840,61 @@ function updateLayers() {
         }
 
         layerItem.className = `layer-item flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${isActive ? 'active' : ''}`;
+        layerItem.draggable = true;
+        layerItem.dataset.index = actualIndex;
+
         layerItem.innerHTML = `
             <div class="flex items-center gap-3 text-sm">
                 <span class="material-symbols-outlined text-text-light-secondary dark:text-dark-secondary text-base">${icon}</span>
                 <span>${name}</span>
             </div>
-            <span class="material-symbols-outlined text-text-light-secondary dark:text-dark-secondary text-lg">${obj.visible !== false ? 'visibility' : 'visibility_off'}</span>
+            <span class="visibility-toggle material-symbols-outlined text-text-light-secondary dark:text-dark-secondary text-lg">${obj.visible !== false ? 'visibility' : 'visibility_off'}</span>
         `;
 
+        // Drag and drop events
+        layerItem.addEventListener('dragstart', (e) => {
+            draggedLayerIndex = actualIndex;
+            layerItem.classList.add('dragging');
+        });
+
+        layerItem.addEventListener('dragend', (e) => {
+            layerItem.classList.remove('dragging');
+            document.querySelectorAll('.layer-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        });
+
+        layerItem.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            layerItem.classList.add('drag-over');
+        });
+
+        layerItem.addEventListener('dragleave', (e) => {
+            layerItem.classList.remove('drag-over');
+        });
+
+        layerItem.addEventListener('drop', (e) => {
+            e.preventDefault();
+            layerItem.classList.remove('drag-over');
+
+            const dropIndex = parseInt(layerItem.dataset.index);
+
+            if (draggedLayerIndex !== null && draggedLayerIndex !== dropIndex) {
+                const objects = canvas.getObjects();
+                const draggedObj = objects[draggedLayerIndex];
+
+                // Remove and reinsert at new position
+                canvas.remove(draggedObj);
+                canvas.insertAt(draggedObj, dropIndex);
+                canvas.renderAll();
+
+                saveState();
+                updateLayers();
+            }
+        });
+
         layerItem.addEventListener('click', (e) => {
-            if (e.target.classList.contains('material-symbols-outlined') && e.target.textContent.includes('visibility')) {
+            if (e.target.classList.contains('visibility-toggle')) {
                 // Toggle visibility
                 obj.visible = !obj.visible;
                 canvas.renderAll();
@@ -590,59 +922,57 @@ function zoomOut() {
 }
 
 function applyZoom() {
+    const canvasContainer = document.getElementById('canvas-container');
     canvas.setZoom(zoomLevel);
-    canvas.setWidth(420 * zoomLevel);
-    canvas.setHeight(594 * zoomLevel);
+
+    // Update canvas display size
+    canvasContainer.style.transform = `scale(${zoomLevel})`;
+    canvasContainer.style.transformOrigin = 'center';
+
     document.getElementById('zoom-level').textContent = Math.round(zoomLevel * 100) + '%';
 }
 
-// Save to localStorage
+// Save to localStorage with custom properties
 function saveToLocalStorage() {
-    const json = JSON.stringify(canvas.toJSON());
-    localStorage.setItem('ebookify-canvas', json);
-    alert('Rascunho salvo com sucesso!');
+    try {
+        const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape']));
+        localStorage.setItem('ebookify-canvas', json);
+        localStorage.setItem('ebookify-canvas-backup', json); // Backup
+        alert('Rascunho salvo com sucesso!');
+    } catch (error) {
+        console.error('Erro ao salvar:', error);
+        alert('Erro ao salvar rascunho. O arquivo pode ser muito grande.');
+    }
 }
 
 // Load from localStorage
 function loadFromLocalStorage() {
-    const json = localStorage.getItem('ebookify-canvas');
-    if (json) {
-        canvas.loadFromJSON(JSON.parse(json), () => {
-            canvas.requestRenderAll();
-            saveState();
-            updateLayers();
-        });
-    }
-}
-
-// Export to JSON
-function exportToJSON() {
-    const json = JSON.stringify(canvas.toJSON());
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ebook-design.json';
-    a.click();
-}
-
-// Import from JSON
-function importFromJSON(file) {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const json = JSON.parse(e.target.result);
-            canvas.loadFromJSON(json, () => {
+    try {
+        const json = localStorage.getItem('ebookify-canvas');
+        if (json) {
+            canvas.loadFromJSON(JSON.parse(json), () => {
                 canvas.requestRenderAll();
                 saveState();
                 updateLayers();
-                alert('Camadas importadas com sucesso!');
             });
-        } catch (err) {
-            alert('Erro ao importar arquivo. Verifique se é um JSON válido.');
         }
-    };
-    reader.readAsText(file);
+    } catch (error) {
+        console.error('Erro ao carregar:', error);
+        // Try backup
+        try {
+            const backup = localStorage.getItem('ebookify-canvas-backup');
+            if (backup) {
+                canvas.loadFromJSON(JSON.parse(backup), () => {
+                    canvas.requestRenderAll();
+                    saveState();
+                    updateLayers();
+                });
+                alert('Carregado do backup devido a erro no arquivo principal.');
+            }
+        } catch (backupError) {
+            console.error('Erro ao carregar backup:', backupError);
+        }
+    }
 }
 
 // Event listeners setup
@@ -650,11 +980,7 @@ function setupEventListeners() {
     // Add components
     document.getElementById('add-shape-btn').addEventListener('click', (e) => {
         e.preventDefault();
-        // Show shape selection menu
-        const shape = prompt('Escolha uma forma:\n1 - Retângulo\n2 - Círculo\n3 - Triângulo');
-        if (shape === '1') addShape('rectangle');
-        else if (shape === '2') addShape('circle');
-        else if (shape === '3') addShape('triangle');
+        document.getElementById('shape-modal').classList.add('show');
     });
 
     document.getElementById('add-text-btn').addEventListener('click', (e) => {
@@ -664,27 +990,57 @@ function setupEventListeners() {
 
     document.getElementById('add-image-btn').addEventListener('click', (e) => {
         e.preventDefault();
-        document.getElementById('image-upload').click();
+        document.getElementById('image-frame-modal').classList.add('show');
     });
 
-    document.getElementById('image-upload').addEventListener('change', (e) => {
+    // Shape modal
+    document.querySelectorAll('#shape-modal .shape-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const shape = option.dataset.shape;
+            addShape(shape);
+            document.getElementById('shape-modal').classList.remove('show');
+        });
+    });
+
+    document.getElementById('close-shape-modal').addEventListener('click', () => {
+        document.getElementById('shape-modal').classList.remove('show');
+    });
+
+    // Image frame modal
+    document.querySelectorAll('#image-frame-modal .shape-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const frame = option.dataset.frame;
+            addImageFrame(frame);
+            document.getElementById('image-frame-modal').classList.remove('show');
+        });
+    });
+
+    document.getElementById('close-frame-modal').addEventListener('click', () => {
+        document.getElementById('image-frame-modal').classList.remove('show');
+    });
+
+    // Add image to frame
+    document.getElementById('add-image-to-frame-btn').addEventListener('click', () => {
+        document.getElementById('frame-image-upload').click();
+    });
+
+    document.getElementById('frame-image-upload').addEventListener('change', (e) => {
         if (e.target.files[0]) {
-            addImage(e.target.files[0]);
+            addImageToFrame(e.target.files[0]);
         }
     });
 
-    // Save/Import
+    // Close modals on background click
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
+    });
+
+    // Save
     document.getElementById('save-draft-btn').addEventListener('click', saveToLocalStorage);
-
-    document.getElementById('import-layers-btn').addEventListener('click', () => {
-        document.getElementById('json-import').click();
-    });
-
-    document.getElementById('json-import').addEventListener('change', (e) => {
-        if (e.target.files[0]) {
-            importFromJSON(e.target.files[0]);
-        }
-    });
 
     // Zoom
     document.getElementById('zoom-in-btn').addEventListener('click', zoomIn);
@@ -715,28 +1071,37 @@ function setupEventListeners() {
         }
     });
 
-    // Canvas dimensions
-    document.getElementById('canvas-width').addEventListener('change', (e) => {
-        canvas.setWidth(parseInt(e.target.value));
-        canvas.renderAll();
-    });
-
-    document.getElementById('canvas-height').addEventListener('change', (e) => {
-        canvas.setHeight(parseInt(e.target.value));
-        canvas.renderAll();
-    });
-
     // Background color
     document.getElementById('bg-color').addEventListener('change', (e) => {
         canvas.backgroundColor = e.target.value;
         document.getElementById('bg-color-preview').value = e.target.value;
         canvas.renderAll();
+        saveState();
     });
 
     document.getElementById('bg-color-preview').addEventListener('change', (e) => {
         canvas.backgroundColor = e.target.value;
         document.getElementById('bg-color').value = e.target.value;
         canvas.renderAll();
+        saveState();
+    });
+
+    // Text variable
+    document.getElementById('text-variable').addEventListener('change', (e) => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.variable = e.target.value;
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    // Image variable
+    document.getElementById('image-variable').addEventListener('change', (e) => {
+        if (activeObject) {
+            activeObject.variable = e.target.value;
+            canvas.renderAll();
+            saveState();
+        }
     });
 
     // Object properties
@@ -745,6 +1110,7 @@ function setupEventListeners() {
             activeObject.set('fill', e.target.value);
             document.getElementById('fill-color-preview').value = e.target.value;
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -753,6 +1119,7 @@ function setupEventListeners() {
             activeObject.set('fill', e.target.value);
             document.getElementById('fill-color').value = e.target.value;
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -761,6 +1128,7 @@ function setupEventListeners() {
             activeObject.set('stroke', e.target.value);
             document.getElementById('stroke-color-preview').value = e.target.value;
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -769,6 +1137,7 @@ function setupEventListeners() {
             activeObject.set('stroke', e.target.value);
             document.getElementById('stroke-color').value = e.target.value;
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -780,6 +1149,10 @@ function setupEventListeners() {
         }
     });
 
+    document.getElementById('stroke-width').addEventListener('change', () => {
+        saveState();
+    });
+
     document.getElementById('font-size').addEventListener('input', (e) => {
         if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
             activeObject.set('fontSize', parseInt(e.target.value));
@@ -788,10 +1161,15 @@ function setupEventListeners() {
         }
     });
 
+    document.getElementById('font-size').addEventListener('change', () => {
+        saveState();
+    });
+
     document.getElementById('font-family').addEventListener('change', (e) => {
         if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
             activeObject.set('fontFamily', e.target.value);
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -800,6 +1178,7 @@ function setupEventListeners() {
             const newWeight = activeObject.fontWeight === 'bold' ? 'normal' : 'bold';
             activeObject.set('fontWeight', newWeight);
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -808,6 +1187,7 @@ function setupEventListeners() {
             const newStyle = activeObject.fontStyle === 'italic' ? 'normal' : 'italic';
             activeObject.set('fontStyle', newStyle);
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -815,6 +1195,7 @@ function setupEventListeners() {
         if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
             activeObject.set('underline', !activeObject.underline);
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -822,6 +1203,7 @@ function setupEventListeners() {
         if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
             activeObject.set('textAlign', 'left');
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -829,6 +1211,7 @@ function setupEventListeners() {
         if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
             activeObject.set('textAlign', 'center');
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -836,6 +1219,7 @@ function setupEventListeners() {
         if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
             activeObject.set('textAlign', 'right');
             canvas.renderAll();
+            saveState();
         }
     });
 
@@ -848,12 +1232,20 @@ function setupEventListeners() {
         }
     });
 
+    document.getElementById('corner-radius').addEventListener('change', () => {
+        saveState();
+    });
+
     document.getElementById('opacity').addEventListener('input', (e) => {
         if (activeObject) {
             activeObject.set('opacity', parseInt(e.target.value) / 100);
             document.getElementById('opacity-value').textContent = e.target.value + '%';
             canvas.renderAll();
         }
+    });
+
+    document.getElementById('opacity').addEventListener('change', () => {
+        saveState();
     });
 
     document.getElementById('delete-btn').addEventListener('click', () => {
@@ -873,7 +1265,7 @@ function setupEventListeners() {
                 canvas.add(cloned);
                 canvas.setActiveObject(cloned);
                 canvas.renderAll();
-            });
+            }, ['variable', 'isFrame', 'frameShape']);
         }
     });
 
