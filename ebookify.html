@@ -260,10 +260,9 @@
 <!-- Aspect Ratio -->
 <label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Proporções</label>
 <select id="aspect-ratio" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
-<option value="none">Nenhuma</option>
+<option value="4:3">4:3 (Padrão)</option>
 <option value="1:1">1:1 (Quadrado)</option>
 <option value="16:9">16:9 (Widescreen)</option>
-<option value="4:3">4:3 (Padrão)</option>
 <option value="21:9">21:9 (Ultrawide)</option>
 <option value="9:16">9:16 (Vertical)</option>
 <option value="3:4">3:4 (Retrato)</option>
@@ -474,6 +473,9 @@ let zoomLevel = 1;
 let activeObject = null;
 let draggedLayerIndex = null;
 let copiedObject = null;
+let isEditingFrameContent = false;
+let editingFrame = null;
+let overlayRect = null;
 
 // Canvas base dimensions
 const CANVAS_WIDTH = 420;
@@ -481,7 +483,6 @@ const CANVAS_HEIGHT = 594;
 
 // Aspect ratio presets
 const ASPECT_RATIOS = {
-    'none': null,
     '1:1': 1,
     '16:9': 16/9,
     '4:3': 4/3,
@@ -513,6 +514,49 @@ function initCanvas() {
     canvas.on('object:scaling', debounce(saveState, 300));
     canvas.on('object:rotating', debounce(saveState, 300));
     canvas.on('text:changed', debounce(saveState, 500));
+
+    // Double click to edit frame content
+    canvas.on('mouse:dblclick', (e) => {
+        if (e.target && e.target.isFrame && e.target.originalImageUrl) {
+            enterFrameEditMode(e.target);
+        }
+    });
+
+    // Exit edit mode when clicking outside or after mouse up
+    canvas.on('mouse:down', (e) => {
+        if (isEditingFrameContent && e.target !== editingFrame) {
+            exitFrameEditMode();
+        }
+    });
+
+    canvas.on('mouse:up', (e) => {
+        if (isEditingFrameContent && editingFrame) {
+            // Update overlay positions when editing frame
+            if (overlayRect) {
+                overlayRect.set({
+                    left: editingFrame.left,
+                    top: editingFrame.top,
+                    scaleX: editingFrame.scaleX,
+                    scaleY: editingFrame.scaleY,
+                });
+            }
+
+            // Update clear rect position (frame boundary)
+            const clearRectObj = canvas.getObjects().find(obj => obj._clearRect);
+            if (clearRectObj) {
+                clearRectObj.set({
+                    left: editingFrame.left,
+                    top: editingFrame.top,
+                });
+                clearRectObj.bringToFront();
+            }
+
+            overlayRect.bringToFront();
+            if (clearRectObj) clearRectObj.bringToFront();
+            editingFrame.bringToFront();
+            canvas.renderAll();
+        }
+    });
 
     // Load from localStorage if exists
     loadFromLocalStorage();
@@ -670,7 +714,7 @@ function updatePropertiesPanel() {
         document.getElementById('image-frame-section').classList.remove('hidden');
         document.getElementById('image-variable-section').classList.remove('hidden');
         document.getElementById('image-variable').value = activeObject.variable || '';
-        document.getElementById('aspect-ratio').value = activeObject.aspectRatio || 'none';
+        document.getElementById('aspect-ratio').value = activeObject.aspectRatio || '4:3';
 
         // Show preview if image exists
         if (activeObject.type === 'image' && activeObject.originalImageUrl) {
@@ -757,56 +801,36 @@ function addText() {
 // Add image frame
 function addImageFrame(frameShape) {
     let frame;
-    const frameSize = 150;
+    const baseSize = 200;
+    const defaultAspectRatio = '4:3';
+    const ratio = ASPECT_RATIOS[defaultAspectRatio];
 
-    switch(frameShape) {
-        case 'square':
-            frame = new fabric.Rect({
-                left: 100,
-                top: 100,
-                width: frameSize,
-                height: frameSize,
-                fill: '#E5E7EB',
-                stroke: '#9CA3AF',
-                strokeWidth: 2,
-                rx: 0,
-                ry: 0,
-                isFrame: true,
-                frameShape: 'square',
-                aspectRatio: 'none',
-                variable: '',
-            });
-            break;
-        case 'circle':
-            frame = new fabric.Circle({
-                left: 100,
-                top: 100,
-                radius: frameSize / 2,
-                fill: '#E5E7EB',
-                stroke: '#9CA3AF',
-                strokeWidth: 2,
-                isFrame: true,
-                frameShape: 'circle',
-                aspectRatio: 'none',
-                variable: '',
-            });
-            break;
-        case 'triangle':
-            frame = new fabric.Triangle({
-                left: 100,
-                top: 100,
-                width: frameSize,
-                height: frameSize,
-                fill: '#E5E7EB',
-                stroke: '#9CA3AF',
-                strokeWidth: 2,
-                isFrame: true,
-                frameShape: 'triangle',
-                aspectRatio: 'none',
-                variable: '',
-            });
-            break;
+    // Calculate dimensions based on 4:3 aspect ratio
+    let frameWidth, frameHeight;
+    if (ratio >= 1) {
+        frameWidth = baseSize;
+        frameHeight = baseSize / ratio;
+    } else {
+        frameHeight = baseSize;
+        frameWidth = baseSize * ratio;
     }
+
+    // Always create rectangular frame with 4:3 aspect ratio as default
+    frame = new fabric.Rect({
+        left: 100,
+        top: 100,
+        width: frameWidth,
+        height: frameHeight,
+        fill: '#E5E7EB',
+        stroke: '#9CA3AF',
+        strokeWidth: 2,
+        rx: 0,
+        ry: 0,
+        isFrame: true,
+        frameShape: 'square',
+        aspectRatio: defaultAspectRatio,
+        variable: '',
+    });
 
     if (frame) {
         canvas.add(frame);
@@ -862,11 +886,11 @@ function applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frame
     const imgWidth = img.width;
     const imgHeight = img.height;
 
-    // Image always uses contain mode (appears complete) - use Math.min to fit entire image
-    // Math.min ensures the entire image fits within the frame, leaving blank space if needed
-    const scale = Math.min(frameWidth / imgWidth, frameHeight / imgHeight);
+    // Image uses cover mode (fills frame completely) - use Math.max to cover entire frame
+    // Math.max ensures the image covers the frame completely, may be cropped
+    const scale = Math.max(frameWidth / imgWidth, frameHeight / imgHeight);
 
-    // Set scale absolutely (not multiply) to ensure image fits completely
+    // Set scale absolutely (not multiply) to ensure image covers frame
     img.set({
         scaleX: scale,
         scaleY: scale,
@@ -882,12 +906,14 @@ function applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frame
             ry: 0,
             originX: 'center',
             originY: 'center',
+            absolutePositioned: true, // Clip path stays fixed when image moves
         });
     } else if (frameShape === 'circle') {
         clipPath = new fabric.Circle({
             radius: frameWidth / 2,
             originX: 'center',
             originY: 'center',
+            absolutePositioned: true,
         });
     } else if (frameShape === 'triangle') {
         clipPath = new fabric.Triangle({
@@ -895,6 +921,7 @@ function applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frame
             height: frameHeight,
             originX: 'center',
             originY: 'center',
+            absolutePositioned: true,
         });
     }
 
@@ -909,7 +936,27 @@ function applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frame
         aspectRatio: frameProps.aspectRatio,
         variable: frameProps.variable,
         originalImageUrl: originalImageUrl,
+        lockRotation: true, // Don't allow rotation for frames
+        lockScalingFlip: true, // Don't allow flipping
+        lockUniScaling: false, // Allow uniform scaling
     });
+
+    // Restrict frame controls to corners only for proportional resizing
+    img.setControlsVisibility({
+        mt: false, // middle top
+        mb: false, // middle bottom
+        ml: false, // middle left
+        mr: false, // middle right
+        bl: true,  // bottom left
+        br: true,  // bottom right
+        tl: true,  // top left
+        tr: true,  // top right
+        mtr: false // rotation control (already locked)
+    });
+
+    // Store original image position for cropping mode
+    img.imageOffsetX = 0;
+    img.imageOffsetY = 0;
 }
 
 // Change aspect ratio
@@ -920,20 +967,6 @@ function changeAspectRatio(newRatio) {
     let newWidth, newHeight;
 
     // Calculate new dimensions based on aspect ratio
-    if (newRatio === 'none') {
-        // Keep current shape
-        if (activeObject.originalImageUrl) {
-            // Reload with current shape
-            reloadFrameImage(activeObject.frameShape);
-        } else {
-            // Just update the property
-            activeObject.aspectRatio = newRatio;
-            saveState();
-        }
-        return;
-    }
-
-    // Convert to rectangular frame with aspect ratio
     const ratio = ASPECT_RATIOS[newRatio];
     if (ratio >= 1) {
         newWidth = baseSize;
@@ -989,134 +1022,44 @@ function changeAspectRatio(newRatio) {
     }
 }
 
-// Reload frame image (when changing back to 'none')
-function reloadFrameImage(shape) {
-    if (!activeObject || !activeObject.originalImageUrl) return;
-
-    const frameProps = {
-        left: activeObject.left,
-        top: activeObject.top,
-        variable: activeObject.variable || '',
-        aspectRatio: 'none',
-    };
-
-    const frameSize = 150;
-    let frameWidth, frameHeight;
-
-    if (shape === 'square') {
-        frameWidth = frameHeight = frameSize;
-    } else if (shape === 'circle') {
-        frameWidth = frameHeight = frameSize;
-    } else if (shape === 'triangle') {
-        frameWidth = frameHeight = frameSize;
-    }
-
-    fabric.Image.fromURL(activeObject.originalImageUrl, (img) => {
-        applyAspectRatioToFrame(img, shape, frameWidth, frameHeight, frameProps, activeObject.originalImageUrl);
-
-        const index = canvas.getObjects().indexOf(activeObject);
-        canvas.remove(activeObject);
-        canvas.insertAt(img, index);
-        canvas.setActiveObject(img);
-        canvas.renderAll();
-        saveState();
-    });
-}
-
 // Delete frame image
 function deleteFrameImage() {
     if (!activeObject || !activeObject.isFrame) return;
 
-    const frameShape = activeObject.frameShape || 'square';
-    const aspectRatio = activeObject.aspectRatio || 'none';
+    const aspectRatio = activeObject.aspectRatio || '4:3';
     const frameProps = {
         left: activeObject.left,
         top: activeObject.top,
         variable: activeObject.variable || '',
     };
 
-    let newFrame;
-    const frameSize = 150;
+    // Create rectangular frame with aspect ratio
+    const ratio = ASPECT_RATIOS[aspectRatio];
+    let width, height;
 
-    if (aspectRatio !== 'none') {
-        // Create rectangular frame with aspect ratio
-        const ratio = ASPECT_RATIOS[aspectRatio];
-        let width, height;
-
-        if (ratio >= 1) {
-            width = 200;
-            height = 200 / ratio;
-        } else {
-            height = 200;
-            width = 200 * ratio;
-        }
-
-        newFrame = new fabric.Rect({
-            left: frameProps.left,
-            top: frameProps.top,
-            width: width,
-            height: height,
-            fill: '#E5E7EB',
-            stroke: '#9CA3AF',
-            strokeWidth: 2,
-            rx: 0,
-            ry: 0,
-            isFrame: true,
-            frameShape: 'square',
-            aspectRatio: aspectRatio,
-            variable: frameProps.variable,
-        });
+    if (ratio >= 1) {
+        width = 200;
+        height = 200 / ratio;
     } else {
-        // Create frame based on original shape
-        switch(frameShape) {
-            case 'square':
-                newFrame = new fabric.Rect({
-                    left: frameProps.left,
-                    top: frameProps.top,
-                    width: frameSize,
-                    height: frameSize,
-                    fill: '#E5E7EB',
-                    stroke: '#9CA3AF',
-                    strokeWidth: 2,
-                    rx: 0,
-                    ry: 0,
-                    isFrame: true,
-                    frameShape: 'square',
-                    aspectRatio: 'none',
-                    variable: frameProps.variable,
-                });
-                break;
-            case 'circle':
-                newFrame = new fabric.Circle({
-                    left: frameProps.left,
-                    top: frameProps.top,
-                    radius: frameSize / 2,
-                    fill: '#E5E7EB',
-                    stroke: '#9CA3AF',
-                    strokeWidth: 2,
-                    isFrame: true,
-                    frameShape: 'circle',
-                    aspectRatio: 'none',
-                    variable: frameProps.variable,
-                });
-                break;
-            case 'triangle':
-                newFrame = new fabric.Triangle({
-                    left: frameProps.left,
-                    top: frameProps.top,
-                    width: frameSize,
-                    height: frameSize,
-                    fill: '#E5E7EB',
-                    stroke: '#9CA3AF',
-                    strokeWidth: 2,
-                    isFrame: true,
-                    frameShape: 'triangle',
-                    aspectRatio: 'none',
-                    variable: frameProps.variable,
-                });
-                break;
-        }
+        height = 200;
+        width = 200 * ratio;
     }
+
+    const newFrame = new fabric.Rect({
+        left: frameProps.left,
+        top: frameProps.top,
+        width: width,
+        height: height,
+        fill: '#E5E7EB',
+        stroke: '#9CA3AF',
+        strokeWidth: 2,
+        rx: 0,
+        ry: 0,
+        isFrame: true,
+        frameShape: 'square',
+        aspectRatio: aspectRatio,
+        variable: frameProps.variable,
+    });
 
     if (newFrame) {
         const index = canvas.getObjects().indexOf(activeObject);
@@ -1126,6 +1069,171 @@ function deleteFrameImage() {
         canvas.renderAll();
         saveState();
     }
+}
+
+// Enter frame content editing mode (double click)
+function enterFrameEditMode(frameObj) {
+    if (!frameObj || !frameObj.isFrame || !frameObj.originalImageUrl) return;
+    if (isEditingFrameContent) return; // Already in edit mode
+
+    isEditingFrameContent = true;
+    editingFrame = frameObj;
+
+    // Get frame and image dimensions
+    const imgWidth = frameObj.width * frameObj.scaleX;
+    const imgHeight = frameObj.height * frameObj.scaleY;
+    const frameClipPath = frameObj.clipPath;
+
+    // Temporarily remove clip path to show full image
+    frameObj._clipPath = frameObj.clipPath;
+    frameObj.clipPath = null;
+
+    // Create overlay with inverse mask effect
+    // Full image overlay (semi-transparent)
+    overlayRect = new fabric.Rect({
+        left: frameObj.left,
+        top: frameObj.top,
+        width: imgWidth / frameObj.scaleX,
+        height: imgHeight / frameObj.scaleY,
+        fill: 'rgba(0, 0, 0, 0.6)', // Dark semi-transparent overlay
+        selectable: false,
+        evented: false,
+        originX: 'center',
+        originY: 'center',
+        excludeFromExport: true,
+    });
+
+    // Create a "hole" in the overlay to show the frame area clearly
+    let clearRect;
+    if (frameClipPath.type === 'rect') {
+        clearRect = new fabric.Rect({
+            left: frameObj.left,
+            top: frameObj.top,
+            width: frameClipPath.width,
+            height: frameClipPath.height,
+            fill: 'rgba(255, 255, 255, 0.1)', // Slightly visible to show frame boundary
+            stroke: '#10B981',
+            strokeWidth: 3,
+            selectable: false,
+            evented: false,
+            originX: 'center',
+            originY: 'center',
+            excludeFromExport: true,
+        });
+    } else if (frameClipPath.type === 'circle') {
+        clearRect = new fabric.Circle({
+            left: frameObj.left,
+            top: frameObj.top,
+            radius: frameClipPath.radius,
+            fill: 'rgba(255, 255, 255, 0.1)',
+            stroke: '#10B981',
+            strokeWidth: 3,
+            selectable: false,
+            evented: false,
+            originX: 'center',
+            originY: 'center',
+            excludeFromExport: true,
+        });
+    } else if (frameClipPath.type === 'triangle') {
+        clearRect = new fabric.Triangle({
+            left: frameObj.left,
+            top: frameObj.top,
+            width: frameClipPath.width,
+            height: frameClipPath.height,
+            fill: 'rgba(255, 255, 255, 0.1)',
+            stroke: '#10B981',
+            strokeWidth: 3,
+            selectable: false,
+            evented: false,
+            originX: 'center',
+            originY: 'center',
+            excludeFromExport: true,
+        });
+    }
+
+    // Add overlays to canvas
+    canvas.add(overlayRect);
+    if (clearRect) {
+        canvas.add(clearRect);
+        clearRect._clearRect = true;
+    }
+
+    overlayRect.bringToFront();
+    if (clearRect) clearRect.bringToFront();
+    frameObj.bringToFront();
+
+    // Configure frame for editing
+    frameObj.set({
+        lockMovementX: false,
+        lockMovementY: false,
+        lockScalingX: false,
+        lockScalingY: false,
+        hasControls: true,
+        hasBorders: true,
+        borderColor: '#10B981',
+        cornerColor: '#10B981',
+        cornerSize: 10,
+    });
+
+    // Restrict controls to corner only (for uniform scaling)
+    frameObj.setControlsVisibility({
+        mt: false, // middle top
+        mb: false, // middle bottom
+        ml: false, // middle left
+        mr: false, // middle right
+        bl: true,  // bottom left
+        br: true,  // bottom right
+        tl: true,  // top left
+        tr: true,  // top right
+        mtr: false // rotation control
+    });
+
+    canvas.renderAll();
+}
+
+// Exit frame content editing mode
+function exitFrameEditMode() {
+    if (!isEditingFrameContent || !editingFrame) return;
+
+    // Remove overlays
+    if (overlayRect) {
+        canvas.remove(overlayRect);
+        overlayRect = null;
+    }
+
+    // Remove clear rect (frame boundary indicator)
+    const objects = canvas.getObjects();
+    const clearRectObj = objects.find(obj => obj._clearRect);
+    if (clearRectObj) {
+        canvas.remove(clearRectObj);
+    }
+
+    // Restore clip path
+    if (editingFrame._clipPath) {
+        editingFrame.clipPath = editingFrame._clipPath;
+        delete editingFrame._clipPath;
+    }
+
+    // Calculate minimum scale to cover frame
+    const frameWidth = editingFrame.clipPath.width;
+    const frameHeight = editingFrame.clipPath.height;
+    const minScale = Math.max(
+        frameWidth / editingFrame.width,
+        frameHeight / editingFrame.height
+    );
+
+    // Ensure image scale is not less than minimum
+    if (editingFrame.scaleX < minScale || editingFrame.scaleY < minScale) {
+        editingFrame.scale(minScale);
+    }
+
+    editingFrame.setCoords();
+    canvas.renderAll();
+
+    isEditingFrameContent = false;
+    editingFrame = null;
+
+    saveState();
 }
 
 // Copy object
