@@ -21,6 +21,7 @@ import Group from "./Group";
 import ImageFilters from "./ImageFilters";
 import Text from "./Text";
 import ImageRadius from "./ImageRadius";
+import AspectRatioMenu from "./AspectRatioMenu";
 import { cn, parseLinearGradientString } from "@/lib/utils";
 
 export const Tools = () => {
@@ -259,6 +260,33 @@ export const Tools = () => {
         {/* image */}
         {activeElement?.type === "image" && (
           <>
+            <div className="flex items-center h-full justify-center">
+              <HovercardGlobal
+                trigger={
+                  <Hint label="Aspect Ratio" side="bottom" sideOffset={5}>
+                    <Button size="icon" variant="ghost">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <path d="M3 9h18" />
+                        <path d="M9 21V9" />
+                      </svg>
+                    </Button>
+                  </Hint>
+                }
+                content={<AspectRatioMenu />}
+                side={"bottom"}
+              />
+            </div>
             <div className="flex items-center h-full justify-center">
               <HovercardGlobal
                 trigger={

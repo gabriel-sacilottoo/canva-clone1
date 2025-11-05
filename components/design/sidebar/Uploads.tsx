@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import * as fabric from "fabric";
 import { ImSpinner6 } from "react-icons/im";
 import NoItems from "@/components/global/NoItems";
+import { setupImageForCrop } from "@/lib/imageCropHelper";
 
 const Uploads = () => {
   const { canvas } = useCanvas();
@@ -71,21 +72,45 @@ const Uploads = () => {
   const addToCanvas = (image: string) => {
     fabric.FabricImage.fromURL(image, { crossOrigin: "anonymous" })
       .then((img) => {
-        // Make sure image has loaded dimensions
+        // Default aspect ratio 4:3
+        const aspectRatio = 4 / 3;
+        const defaultWidth = 400;
+        const frameHeight = defaultWidth / aspectRatio; // 300 for 4:3
+
+        // Calculate scale to cover the frame (object-fit: cover behavior)
+        const scaleX = defaultWidth / img.width!;
+        const scaleY = frameHeight / img.height!;
+        const scale = Math.max(scaleX, scaleY); // Use max to ensure cover
+
+        // Create frame (clipPath) with 4:3 aspect ratio
         const clipPath = new fabric.Rect({
-          width: img.width!,
-          height: img.height!,
+          width: defaultWidth,
+          height: frameHeight,
           rx: 0,
           ry: 0,
           originX: "center",
           originY: "center",
         });
 
+        // Store aspect ratio and crop mode data on the image
+        (img as any).aspectRatio = aspectRatio;
+        (img as any).aspectRatioLabel = "4:3";
+        (img as any).isInCropMode = false;
+        (img as any).originalWidth = img.width;
+        (img as any).originalHeight = img.height;
+
+        // Apply scale to image to cover the frame
         img.set({
           clipPath,
           originX: "center",
           originY: "center",
+          scaleX: scale,
+          scaleY: scale,
         });
+
+        // Setup image for crop functionality
+        setupImageForCrop(img);
+
         canvas?.add(img);
         canvas?.setActiveObject(img);
         canvas?.renderAll();

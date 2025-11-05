@@ -14,6 +14,13 @@ import { useCanvas } from "@/store/useCanvas";
 import { useNetworkStatusStore } from "@/store/NetworkStatusStore";
 import { ImSpinner6 } from "react-icons/im";
 import { useCurrentUser } from "@/fetch/useCurrentUser";
+import {
+  toggleCropMode,
+  exitCropMode,
+  ensureImageCoversFrame,
+  setupImageForCrop,
+  updateCropOverlays,
+} from "@/lib/imageCropHelper";
 
 const Design = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -96,6 +103,97 @@ const Design = () => {
     FabricCanvas.on("selection:created", updateSelectedObject);
     FabricCanvas.on("selection:updated", updateSelectedObject);
     FabricCanvas.on("selection:cleared", updateSelectedObject);
+
+    // Handle double click to enter crop mode
+    FabricCanvas.on("mouse:dblclick", (event) => {
+      const target = event.target;
+      if (target && target.type === "image") {
+        toggleCropMode(target as fabric.FabricImage, FabricCanvas);
+      }
+    });
+
+    // Exit crop mode when clicking outside the image
+    FabricCanvas.on("mouse:down", (event) => {
+      const target = event.target;
+      const activeObj = FabricCanvas.getActiveObject();
+
+      // If clicking outside while in crop mode, exit crop mode
+      if (!target && activeObj && activeObj.type === "image") {
+        if ((activeObj as any).isInCropMode) {
+          exitCropMode(activeObj as fabric.FabricImage, FabricCanvas);
+        }
+      }
+    });
+
+    // Handle mouse up to exit crop mode and ensure image covers frame
+    FabricCanvas.on("mouse:up", (event) => {
+      const target = event.target;
+      if (target && target.type === "image") {
+        const image = target as fabric.FabricImage;
+
+        // If in crop mode and mouse is released, exit crop mode
+        if ((image as any).isInCropMode) {
+          exitCropMode(image, FabricCanvas);
+        }
+
+        // Ensure image always covers the frame
+        if (ensureImageCoversFrame(image)) {
+          FabricCanvas.renderAll();
+        }
+      }
+    });
+
+    // Handle object moving to update overlays in crop mode
+    FabricCanvas.on("object:moving", (event) => {
+      const target = event.target;
+      if (target && target.type === "image") {
+        const image = target as fabric.FabricImage;
+
+        // Update overlays while moving in crop mode
+        if ((image as any).isInCropMode) {
+          updateCropOverlays(image, FabricCanvas);
+        }
+      }
+    });
+
+    // Handle object scaling to maintain minimum coverage and update overlays
+    FabricCanvas.on("object:scaling", (event) => {
+      const target = event.target;
+      if (target && target.type === "image") {
+        const image = target as fabric.FabricImage;
+
+        // In crop mode, ensure image covers frame and update overlays
+        if ((image as any).isInCropMode) {
+          ensureImageCoversFrame(image);
+          updateCropOverlays(image, FabricCanvas);
+        }
+
+        // Maintain aspect ratio for frame scaling (not in crop mode)
+        if (!(image as any).isInCropMode) {
+          const aspectRatio = (image as any).aspectRatio || 4 / 3;
+          const clipPath = image.clipPath as fabric.Rect;
+
+          if (clipPath) {
+            // When scaling the frame, maintain its aspect ratio
+            const newWidth = clipPath.width! * (image.scaleX || 1);
+            const newHeight = newWidth / aspectRatio;
+
+            clipPath.set({
+              width: newWidth / (image.scaleX || 1),
+              height: newHeight / (image.scaleY || 1),
+            });
+          }
+        }
+      }
+    });
+
+    // Setup images with crop functionality when added
+    FabricCanvas.on("object:added", (event) => {
+      const target = event.target;
+      if (target && target.type === "image") {
+        setupImageForCrop(target as fabric.FabricImage);
+      }
+    });
 
     return () => {
       FabricCanvas.dispose();
