@@ -70,7 +70,7 @@ const Design = () => {
       // freeDrawingCursor:
     });
 
-    FabricCanvas.loadFromJSON(design?.json).then((canvas) =>
+    FabricCanvas.loadFromJSON(design?.json).then((canvas: fabric.Canvas) =>
       canvas.requestRenderAll()
     );
 
@@ -105,7 +105,7 @@ const Design = () => {
     FabricCanvas.on("selection:cleared", updateSelectedObject);
 
     // Handle double click to enter crop mode
-    FabricCanvas.on("mouse:dblclick", (event) => {
+    FabricCanvas.on("mouse:dblclick", (event: fabric.TPointerEventInfo) => {
       const target = event.target;
       if (target && target.type === "image") {
         toggleCropMode(target as fabric.FabricImage, FabricCanvas);
@@ -113,7 +113,7 @@ const Design = () => {
     });
 
     // Exit crop mode when clicking outside the image
-    FabricCanvas.on("mouse:down", (event) => {
+    FabricCanvas.on("mouse:down", (event: fabric.TPointerEventInfo) => {
       const target = event.target;
       const activeObj = FabricCanvas.getActiveObject();
 
@@ -126,7 +126,7 @@ const Design = () => {
     });
 
     // Handle mouse up to exit crop mode and ensure image covers frame
-    FabricCanvas.on("mouse:up", (event) => {
+    FabricCanvas.on("mouse:up", (event: fabric.TPointerEventInfo) => {
       const target = event.target;
       if (target && target.type === "image") {
         const image = target as fabric.FabricImage;
@@ -144,7 +144,7 @@ const Design = () => {
     });
 
     // Handle object moving to update overlays in crop mode
-    FabricCanvas.on("object:moving", (event) => {
+    FabricCanvas.on("object:moving", (event: fabric.BasicTransformEvent) => {
       const target = event.target;
       if (target && target.type === "image") {
         const image = target as fabric.FabricImage;
@@ -157,7 +157,7 @@ const Design = () => {
     });
 
     // Handle object scaling to maintain minimum coverage and update overlays
-    FabricCanvas.on("object:scaling", (event) => {
+    FabricCanvas.on("object:scaling", (event: fabric.BasicTransformEvent) => {
       const target = event.target;
       if (target && target.type === "image") {
         const image = target as fabric.FabricImage;
@@ -188,7 +188,7 @@ const Design = () => {
     });
 
     // Setup images with crop functionality when added
-    FabricCanvas.on("object:added", (event) => {
+    FabricCanvas.on("object:added", (event: fabric.ObjectEvents["added"]) => {
       const target = event.target;
       if (target && target.type === "image") {
         setupImageForCrop(target as fabric.FabricImage);
@@ -198,7 +198,7 @@ const Design = () => {
     return () => {
       FabricCanvas.dispose();
     };
-  }, [width, height]);
+  }, [width, height, setCanvas, setActiveElement, setActiveElements]);
 
   handleStringChange("cornerColor", "#8B3DFF");
   handleStringChange("cornerStyle", "circle");
@@ -209,11 +209,11 @@ const Design = () => {
   useEffect(() => {
     if (!canvas) return;
     canvas.selection = isOnline;
-    canvas.getObjects().forEach((object) => {
+    canvas.getObjects().forEach((object: fabric.Object) => {
       object.selectable = isOnline;
       object.evented = isOnline;
     });
-  }, [isOnline]);
+  }, [isOnline, canvas]);
 
   return (
     <div className="h-full flex flex-col">
