@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>E-book Creation Platform</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;family=Poppins:wght@700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#10B981", // Emerald Green
+              secondary: "#06B6D4", // Turquoise Blue
+              accent: "#FB7185", // Coral Pink
+              "background-light": "#F9FAFB", // Off-white
+              "background-dark": "#1F2937", // Graphite-adjacent for main background
+              "surface-light": "#FFFFFF", // White for cards/panels
+              "surface-dark": "#374151", // Graphite
+              "text-light-primary": "#111827",
+              "text-dark-primary": "#F9FAFB",
+              "text-light-secondary": "#6B7280",
+              "text-dark-secondary": "#9CA3AF",
+            },
+            fontFamily: {
+              display: ["Poppins", "sans-serif"],
+              body: ["Inter", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "12px",
+            },
+            boxShadow: {
+                'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                'soft-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05)',
+            }
+          },
+        },
+      };
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glas {
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+        .dark .glas {
+            background: rgba(55, 65, 81, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .layer-item {
+            cursor: grab;
+        }
+        .layer-item:active {
+            cursor: grabbing;
+        }
+        .layer-item.active {
+            background: rgba(16, 185, 129, 0.1);
+        }
+        .dark .layer-item.active {
+            background: rgba(16, 185, 129, 0.2);
+        }
+        .layer-item.dragging {
+            opacity: 0.5;
+        }
+        .layer-item.drag-over {
+            border-top: 2px solid #10B981;
+        }
+        #canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .dark .modal-content {
+            background-color: #374151;
+        }
+        .shape-option {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .shape-option:hover {
+            transform: scale(1.05);
+        }
+        .image-preview-container {
+            position: relative;
+            width: 100%;
+            max-height: 200px;
+            overflow: hidden;
+            border-radius: 8px;
+            border: 2px solid #E5E7EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #F3F4F6;
+        }
+        .image-preview-container img {
+            max-width: 100%;
+            max-height: 200px;
+            object-fit: contain;
+        }
+        .delete-image-btn {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .delete-image-btn:hover {
+            background: rgba(220, 38, 38, 1);
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-body text-text-light-primary dark:text-dark-primary antialiased">
+<div class="flex h-screen w-full flex-col">
+<header class="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 dark:border-gray-700 px-6 bg-surface-light dark:bg-surface-dark shadow-soft z-20">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary text-3xl">import_contacts</span>
+<h1 class="font-display text-xl font-bold tracking-tight">Ebookify</h1>
+</div>
+<div class="flex items-center gap-4">
+<button id="save-draft-btn" class="bg-secondary text-white font-bold py-2 px-4 rounded-lg shadow-soft hover:brightness-105 transition-all flex items-center justify-center gap-2 text-sm">
+<span class="material-symbols-outlined text-base">save</span>
+                    Salvar rascunho
+                </button>
+<button class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<button class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="flex items-center gap-2">
+<img alt="User avatar" class="h-8 w-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3qTug62Z5zJHrMWHOYT-K1wVaZ4eA4PFb7Y79YsJ6nE-P-cSElVQ4V5WrbWa9CyOEDcEH4XZfNOwHmnrkJpcR5Zh80Mnp1CsJmEnicMl6i_CS0ZskSvdcrd-qvEbARDvK1NRG7KU4NmZwZjHLcbenxIrJTSixamAnO0gmrv99kROVmrkcmu_ESfu6jPrS9lZF8oE3_dnZnnYjbokGqNejr5jIS95z9wd50EpvMYR4RtXXrb8kEcqKdMD7wb79bCcr_IuOYUPjB49B"/>
+<span class="text-sm font-medium hidden sm:block">Meu Usuário</span>
+</div>
+</div>
+</header>
+<div class="flex flex-1 overflow-hidden">
+<aside class="w-72 shrink-0 border-r border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-surface-dark p-4 flex flex-col gap-6 overflow-y-auto">
+<div class="space-y-4">
+<h2 class="text-sm font-bold font-display uppercase tracking-wider text-text-light-secondary dark:text-dark-secondary px-2">Adicionar Componente</h2>
+<ul class="space-y-2">
+<li><a id="add-shape-btn" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors" href="#"><span class="material-symbols-outlined text-primary">check_box_outline_blank</span>Formas</a></li>
+<li><a id="add-text-btn" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors" href="#"><span class="material-symbols-outlined text-primary">title</span>Texto</a></li>
+<li><a id="add-image-btn" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors" href="#"><span class="material-symbols-outlined text-primary">image</span>Imagem</a></li>
+</ul>
+</div>
+<div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+<div class="space-y-4 flex-1">
+<h2 class="text-sm font-bold font-display uppercase tracking-wider text-text-light-secondary dark:text-dark-secondary px-2">Camadas</h2>
+<div id="layers-list" class="space-y-3">
+<!-- Layers will be dynamically populated here -->
+</div>
+</div>
+<button id="preview-btn" class="w-full bg-accent text-white font-bold py-2.5 px-4 rounded-lg shadow-soft hover:brightness-105 transition-all">
+                    Visualizar E-book
+                </button>
+</aside>
+<main class="flex-1 bg-background-light dark:bg-background-dark p-8 overflow-auto flex flex-col items-center" style="padding-bottom: 120px;">
+<div class="w-full max-w-4xl mx-auto flex-1 flex flex-col items-center justify-center">
+<div id="canvas-container" class="bg-white dark:bg-gray-800 rounded-lg shadow-soft-lg" style="box-shadow: 0 0 0 1px rgba(0,0,0,0.05), 0 10px 38px -10px rgba(0,0,0,0.1), 0 10px 20px -15px rgba(0,0,0,0.1);">
+<canvas id="canvas"></canvas>
+</div>
+</div>
+</main>
+<aside class="w-80 shrink-0 border-l border-gray-200 dark:border-gray-700 bg-surface-light dark:bg-surface-dark p-6 flex flex-col gap-6 overflow-y-auto">
+<div>
+<h2 class="text-sm font-bold font-display uppercase tracking-wider text-text-light-secondary dark:text-dark-secondary mb-4">Propriedades da Página</h2>
+<div class="space-y-4">
+<div>
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary" for="bg-color">Cor de Fundo</label>
+<div class="flex items-center gap-2 mt-1">
+<input id="bg-color-preview" type="color" class="w-8 h-8 rounded-md border border-gray-300 dark:border-gray-600" value="#ffffff"/>
+<input id="bg-color" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary" type="text" value="#FFFFFF"/>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Object Properties Panel (shown when object is selected) -->
+<div id="object-properties" class="hidden">
+<h2 class="text-sm font-bold font-display uppercase tracking-wider text-text-light-secondary dark:text-dark-secondary mb-4">Propriedades do Objeto</h2>
+<div class="space-y-4">
+
+<!-- Variable Field for Text -->
+<div id="text-variable-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Variável</label>
+<select id="text-variable" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="">Nenhuma</option>
+<option value="Capitulo">Capitulo</option>
+<option value="Titulo">Titulo</option>
+<option value="Subtitulo">Subtitulo</option>
+<option value="Topico">Topico</option>
+<option value="Texto">Texto</option>
+<option value="Texto2">Texto2</option>
+<option value="Texto3">Texto3</option>
+</select>
+</div>
+
+<!-- Variable Field for Image -->
+<div id="image-variable-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Variável</label>
+<select id="image-variable" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="">Nenhuma</option>
+<option value="Imagem">Imagem</option>
+<option value="Imagem2">Imagem2</option>
+<option value="Icone">Icone</option>
+<option value="Icone2">Icone2</option>
+<option value="Icone3">Icone3</option>
+</select>
+</div>
+
+<!-- Image Frame Section -->
+<div id="image-frame-section" class="hidden">
+<!-- Aspect Ratio -->
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Proporções</label>
+<select id="aspect-ratio" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="none">Nenhuma</option>
+<option value="1:1">1:1 (Quadrado)</option>
+<option value="16:9">16:9 (Widescreen)</option>
+<option value="4:3">4:3 (Padrão)</option>
+<option value="21:9">21:9 (Ultrawide)</option>
+<option value="9:16">9:16 (Vertical)</option>
+<option value="3:4">3:4 (Retrato)</option>
+</select>
+
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary mt-3">Adicionar Imagem à Moldura</label>
+<button id="add-image-to-frame-btn" class="w-full bg-primary text-white p-2 rounded hover:bg-primary/90 mt-1 flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">upload</span>
+                        Selecionar Imagem
+                    </button>
+
+<!-- Image Preview -->
+<div id="image-preview-section" class="hidden mt-3">
+<div class="image-preview-container">
+<img id="frame-image-preview" src="" alt="Preview"/>
+<div class="delete-image-btn" id="delete-frame-image-btn">
+<span class="material-symbols-outlined text-lg">delete</span>
+</div>
+</div>
+</div>
+</div>
+
+<!-- Fill Color -->
+<div id="fill-color-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Cor de Preenchimento</label>
+<div class="flex items-center gap-2 mt-1">
+<input id="fill-color-preview" type="color" class="w-8 h-8 rounded-md border border-gray-300 dark:border-gray-600"/>
+<input id="fill-color" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary" type="text"/>
+</div>
+</div>
+
+<!-- Stroke Color -->
+<div id="stroke-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Cor da Borda</label>
+<div class="flex items-center gap-2 mt-1">
+<input id="stroke-color-preview" type="color" class="w-8 h-8 rounded-md border border-gray-300 dark:border-gray-600"/>
+<input id="stroke-color" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary" type="text"/>
+</div>
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary mt-2">Espessura da Borda</label>
+<input id="stroke-width" type="range" min="0" max="20" value="2" class="w-full mt-1"/>
+<span id="stroke-width-value" class="text-xs text-gray-500">2px</span>
+</div>
+
+<!-- Text Properties -->
+<div id="text-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Tamanho da Fonte</label>
+<input id="font-size" type="range" min="8" max="120" value="24" class="w-full mt-1"/>
+<span id="font-size-value" class="text-xs text-gray-500">24px</span>
+
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary mt-2">Família da Fonte</label>
+<select id="font-family" class="w-full bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm focus:ring-primary focus:border-primary mt-1">
+<option value="Arial">Arial</option>
+<option value="Helvetica">Helvetica</option>
+<option value="Times New Roman">Times New Roman</option>
+<option value="Courier New">Courier New</option>
+<option value="Georgia">Georgia</option>
+<option value="Verdana">Verdana</option>
+<option value="Comic Sans MS">Comic Sans MS</option>
+<option value="Poppins">Poppins</option>
+<option value="Inter">Inter</option>
+</select>
+
+<div class="flex gap-2 mt-2">
+<button id="bold-btn" class="flex-1 bg-gray-100 dark:bg-gray-700 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+<span class="font-bold">B</span>
+</button>
+<button id="italic-btn" class="flex-1 bg-gray-100 dark:bg-gray-700 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+<span class="italic">I</span>
+</button>
+<button id="underline-btn" class="flex-1 bg-gray-100 dark:bg-gray-700 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+<span class="underline">U</span>
+</button>
+</div>
+
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary mt-2">Alinhamento</label>
+<div class="flex gap-2 mt-1">
+<button id="align-left-btn" class="flex-1 bg-gray-100 dark:bg-gray-700 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+<span class="material-symbols-outlined text-sm">format_align_left</span>
+</button>
+<button id="align-center-btn" class="flex-1 bg-gray-100 dark:bg-gray-700 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+<span class="material-symbols-outlined text-sm">format_align_center</span>
+</button>
+<button id="align-right-btn" class="flex-1 bg-gray-100 dark:bg-gray-700 p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-600">
+<span class="material-symbols-outlined text-sm">format_align_right</span>
+</button>
+</div>
+</div>
+
+<!-- Corner Radius -->
+<div id="corner-radius-section" class="hidden">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Raio dos Cantos</label>
+<input id="corner-radius" type="range" min="0" max="100" value="0" class="w-full mt-1"/>
+<span id="corner-radius-value" class="text-xs text-gray-500">0px</span>
+</div>
+
+<!-- Opacity -->
+<div id="opacity-section">
+<label class="block text-sm font-medium text-text-light-secondary dark:text-dark-secondary">Opacidade</label>
+<input id="opacity" type="range" min="0" max="100" value="100" class="w-full mt-1"/>
+<span id="opacity-value" class="text-xs text-gray-500">100%</span>
+</div>
+
+<!-- Actions -->
+<div class="flex gap-2 mt-4">
+<button id="delete-btn" class="flex-1 bg-red-500 text-white p-2 rounded hover:bg-red-600">
+<span class="material-symbols-outlined text-sm">delete</span>
+</button>
+<button id="duplicate-btn" class="flex-1 bg-blue-500 text-white p-2 rounded hover:bg-blue-600">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</div>
+</div>
+</aside>
+</div>
+
+<!-- Zoom and Undo/Redo Controls (Fixed Position) -->
+<div class="glas rounded-full shadow-soft-lg p-2 flex items-center gap-2">
+<button id="zoom-out-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">zoom_out</span>
+</button>
+<span id="zoom-level" class="text-sm font-medium w-16 text-center">100%</span>
+<button id="zoom-in-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">zoom_in</span>
+</button>
+<div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-2"></div>
+<button id="undo-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">undo</span>
+</button>
+<button id="redo-btn" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-white/50 dark:hover:bg-gray-600/50 transition-colors">
+<span class="material-symbols-outlined">redo</span>
+</button>
+</div>
+</div>
+
+<!-- Shape Selection Modal -->
+<div id="shape-modal" class="modal">
+<div class="modal-content">
+<h2 class="text-xl font-display font-bold mb-4">Selecione uma Forma</h2>
+<div class="grid grid-cols-3 gap-4">
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-shape="rectangle">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-12 bg-primary rounded"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Retângulo</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-shape="circle">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-16 bg-secondary rounded-full"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Círculo</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-shape="triangle">
+<div class="w-full h-24 flex items-center justify-center">
+<div style="width: 0; height: 0; border-left: 32px solid transparent; border-right: 32px solid transparent; border-bottom: 56px solid #FB7185;"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Triângulo</p>
+</div>
+</div>
+<button id="close-shape-modal" class="mt-4 w-full bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-white p-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                Cancelar
+            </button>
+</div>
+</div>
+
+<!-- Image Frame Modal -->
+<div id="image-frame-modal" class="modal">
+<div class="modal-content">
+<h2 class="text-xl font-display font-bold mb-4">Selecione o Formato da Moldura</h2>
+<div class="grid grid-cols-3 gap-4">
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-frame="square">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-16 bg-gray-400 rounded"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Quadrado</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-frame="circle">
+<div class="w-full h-24 flex items-center justify-center">
+<div class="w-16 h-16 bg-gray-400 rounded-full"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Círculo</p>
+</div>
+<div class="shape-option text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg" data-frame="triangle">
+<div class="w-full h-24 flex items-center justify-center">
+<div style="width: 0; height: 0; border-left: 32px solid transparent; border-right: 32px solid transparent; border-bottom: 56px solid #9CA3AF;"></div>
+</div>
+<p class="mt-2 text-sm font-medium">Triângulo</p>
+</div>
+</div>
+<button id="close-frame-modal" class="mt-4 w-full bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-white p-2 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                Cancelar
+            </button>
+</div>
+</div>
+
+<!-- Hidden file input for image upload -->
+<input type="file" id="image-upload" accept="image/*" style="display: none;">
+<input type="file" id="frame-image-upload" accept="image/*" style="display: none;">
+
+<script>
+// Global variables
+let canvas;
+let undoStack = [];
+let redoStack = [];
+let pauseSaving = false;
+let previousJson = null;
+let zoomLevel = 1;
+let activeObject = null;
+let draggedLayerIndex = null;
+let copiedObject = null;
+
+// Canvas base dimensions
+const CANVAS_WIDTH = 420;
+const CANVAS_HEIGHT = 594;
+
+// Aspect ratio presets
+const ASPECT_RATIOS = {
+    'none': null,
+    '1:1': 1,
+    '16:9': 16/9,
+    '4:3': 4/3,
+    '21:9': 21/9,
+    '9:16': 9/16,
+    '3:4': 3/4,
+};
+
+// Initialize canvas
+function initCanvas() {
+    canvas = new fabric.Canvas('canvas', {
+        width: CANVAS_WIDTH,
+        height: CANVAS_HEIGHT,
+        backgroundColor: '#FFFFFF',
+        controlsAboveOverlay: true,
+        preserveObjectStacking: true,
+    });
+
+    // Event listeners for undo/redo - capture more granular changes
+    canvas.on('selection:created', updateSelection);
+    canvas.on('selection:updated', updateSelection);
+    canvas.on('selection:cleared', clearSelection);
+    canvas.on('object:modified', saveState);
+    canvas.on('object:added', saveState);
+    canvas.on('object:removed', saveState);
+
+    // Additional granular events for better undo/redo
+    canvas.on('object:moving', debounce(saveState, 300));
+    canvas.on('object:scaling', debounce(saveState, 300));
+    canvas.on('object:rotating', debounce(saveState, 300));
+    canvas.on('text:changed', debounce(saveState, 500));
+
+    // Load from localStorage if exists
+    loadFromLocalStorage();
+
+    // Initial state
+    saveState();
+    updateLayers();
+}
+
+// Debounce function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Save state for undo/redo with custom properties
+function saveState() {
+    if (pauseSaving) return;
+
+    const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']));
+    if (previousJson !== json) {
+        undoStack.push(json);
+        previousJson = json;
+        redoStack = [];
+
+        // Keep stack size manageable - increased to 200 for better undo/redo
+        if (undoStack.length > 200) {
+            undoStack.shift();
+        }
+
+        updateUndoRedoButtons();
+    }
+
+    updateLayers();
+}
+
+// Undo
+function undo() {
+    if (undoStack.length <= 1) return;
+
+    pauseSaving = true;
+
+    const lastState = undoStack.pop();
+    const prevState = undoStack[undoStack.length - 1];
+
+    if (lastState) redoStack.push(lastState);
+    if (prevState) {
+        canvas.loadFromJSON(JSON.parse(prevState), () => {
+            canvas.requestRenderAll();
+            previousJson = prevState;
+            pauseSaving = false;
+            updateUndoRedoButtons();
+            updateLayers();
+        });
+    }
+}
+
+// Redo
+function redo() {
+    if (redoStack.length === 0) return;
+
+    pauseSaving = true;
+
+    const nextState = redoStack.pop();
+    if (nextState) {
+        undoStack.push(nextState);
+        canvas.loadFromJSON(JSON.parse(nextState), () => {
+            canvas.requestRenderAll();
+            previousJson = nextState;
+            pauseSaving = false;
+            updateUndoRedoButtons();
+            updateLayers();
+        });
+    }
+}
+
+// Update undo/redo buttons
+function updateUndoRedoButtons() {
+    document.getElementById('undo-btn').disabled = undoStack.length <= 1;
+    document.getElementById('redo-btn').disabled = redoStack.length === 0;
+}
+
+// Update selection
+function updateSelection(e) {
+    activeObject = canvas.getActiveObject();
+    updatePropertiesPanel();
+    updateLayers();
+}
+
+// Clear selection
+function clearSelection() {
+    activeObject = null;
+    document.getElementById('object-properties').classList.add('hidden');
+    updateLayers();
+}
+
+// Update properties panel based on selected object
+function updatePropertiesPanel() {
+    if (!activeObject) return;
+
+    const panel = document.getElementById('object-properties');
+    panel.classList.remove('hidden');
+
+    // Hide all sections first
+    document.getElementById('fill-color-section').classList.add('hidden');
+    document.getElementById('stroke-section').classList.add('hidden');
+    document.getElementById('text-section').classList.add('hidden');
+    document.getElementById('text-variable-section').classList.add('hidden');
+    document.getElementById('corner-radius-section').classList.add('hidden');
+    document.getElementById('image-variable-section').classList.add('hidden');
+    document.getElementById('image-frame-section').classList.add('hidden');
+    document.getElementById('image-preview-section').classList.add('hidden');
+
+    // Show relevant sections based on object type
+    if (activeObject.fill !== undefined && activeObject.type !== 'image' && !activeObject.isFrame) {
+        document.getElementById('fill-color-section').classList.remove('hidden');
+        const fillColor = activeObject.fill || '#000000';
+        document.getElementById('fill-color').value = fillColor;
+        document.getElementById('fill-color-preview').value = fillColor;
+    }
+
+    if (activeObject.stroke !== undefined && activeObject.type !== 'image' && !activeObject.isFrame) {
+        document.getElementById('stroke-section').classList.remove('hidden');
+        const strokeColor = activeObject.stroke || '#000000';
+        document.getElementById('stroke-color').value = strokeColor;
+        document.getElementById('stroke-color-preview').value = strokeColor;
+        document.getElementById('stroke-width').value = activeObject.strokeWidth || 0;
+        document.getElementById('stroke-width-value').textContent = (activeObject.strokeWidth || 0) + 'px';
+    }
+
+    if (activeObject.type === 'i-text' || activeObject.type === 'textbox') {
+        document.getElementById('text-section').classList.remove('hidden');
+        document.getElementById('text-variable-section').classList.remove('hidden');
+        document.getElementById('font-size').value = activeObject.fontSize || 24;
+        document.getElementById('font-size-value').textContent = (activeObject.fontSize || 24) + 'px';
+        document.getElementById('font-family').value = activeObject.fontFamily || 'Arial';
+        document.getElementById('text-variable').value = activeObject.variable || '';
+    }
+
+    if (activeObject.type === 'rect' && !activeObject.isFrame) {
+        document.getElementById('corner-radius-section').classList.remove('hidden');
+        document.getElementById('corner-radius').value = activeObject.rx || 0;
+        document.getElementById('corner-radius-value').textContent = (activeObject.rx || 0) + 'px';
+    }
+
+    // Image frame
+    if (activeObject.isFrame) {
+        document.getElementById('image-frame-section').classList.remove('hidden');
+        document.getElementById('image-variable-section').classList.remove('hidden');
+        document.getElementById('image-variable').value = activeObject.variable || '';
+        document.getElementById('aspect-ratio').value = activeObject.aspectRatio || 'none';
+
+        // Show preview if image exists
+        if (activeObject.type === 'image' && activeObject.originalImageUrl) {
+            document.getElementById('image-preview-section').classList.remove('hidden');
+            document.getElementById('frame-image-preview').src = activeObject.originalImageUrl;
+        }
+    }
+
+    // Regular image (not frame)
+    if (activeObject.type === 'image' && !activeObject.isFrame) {
+        document.getElementById('image-variable-section').classList.remove('hidden');
+        document.getElementById('image-variable').value = activeObject.variable || '';
+    }
+
+    // Opacity
+    document.getElementById('opacity').value = (activeObject.opacity || 1) * 100;
+    document.getElementById('opacity-value').textContent = Math.round((activeObject.opacity || 1) * 100) + '%';
+}
+
+// Add shape
+function addShape(type) {
+    let shape;
+
+    switch(type) {
+        case 'rectangle':
+            shape = new fabric.Rect({
+                left: 100,
+                top: 100,
+                fill: '#10B981',
+                stroke: '#059669',
+                strokeWidth: 2,
+                width: 200,
+                height: 150,
+                rx: 0,
+                ry: 0,
+            });
+            break;
+        case 'circle':
+            shape = new fabric.Circle({
+                left: 100,
+                top: 100,
+                fill: '#06B6D4',
+                stroke: '#0891B2',
+                strokeWidth: 2,
+                radius: 75,
+            });
+            break;
+        case 'triangle':
+            shape = new fabric.Triangle({
+                left: 100,
+                top: 100,
+                fill: '#FB7185',
+                stroke: '#F43F5E',
+                strokeWidth: 2,
+                width: 150,
+                height: 130,
+            });
+            break;
+    }
+
+    if (shape) {
+        canvas.add(shape);
+        canvas.setActiveObject(shape);
+        canvas.renderAll();
+    }
+}
+
+// Add text
+function addText() {
+    const text = new fabric.IText('Clique para editar', {
+        left: 100,
+        top: 100,
+        fontFamily: 'Poppins',
+        fill: '#111827',
+        fontSize: 24,
+        variable: '',
+    });
+
+    canvas.add(text);
+    canvas.setActiveObject(text);
+    canvas.renderAll();
+}
+
+// Add image frame
+function addImageFrame(frameShape) {
+    let frame;
+    const frameSize = 150;
+
+    switch(frameShape) {
+        case 'square':
+            frame = new fabric.Rect({
+                left: 100,
+                top: 100,
+                width: frameSize,
+                height: frameSize,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                rx: 0,
+                ry: 0,
+                isFrame: true,
+                frameShape: 'square',
+                aspectRatio: 'none',
+                variable: '',
+            });
+            break;
+        case 'circle':
+            frame = new fabric.Circle({
+                left: 100,
+                top: 100,
+                radius: frameSize / 2,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                isFrame: true,
+                frameShape: 'circle',
+                aspectRatio: 'none',
+                variable: '',
+            });
+            break;
+        case 'triangle':
+            frame = new fabric.Triangle({
+                left: 100,
+                top: 100,
+                width: frameSize,
+                height: frameSize,
+                fill: '#E5E7EB',
+                stroke: '#9CA3AF',
+                strokeWidth: 2,
+                isFrame: true,
+                frameShape: 'triangle',
+                aspectRatio: 'none',
+                variable: '',
+            });
+            break;
+    }
+
+    if (frame) {
+        canvas.add(frame);
+        canvas.setActiveObject(frame);
+        canvas.renderAll();
+    }
+}
+
+// Add image to frame
+function addImageToFrame(file) {
+    if (!activeObject || !activeObject.isFrame) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const imageUrl = e.target.result;
+        const frameProps = {
+            left: activeObject.left,
+            top: activeObject.top,
+            variable: activeObject.variable || '',
+            aspectRatio: activeObject.aspectRatio || 'none',
+        };
+
+        // Get frame dimensions
+        let frameWidth, frameHeight;
+        const frameShape = activeObject.frameShape || 'square';
+
+        if (frameShape === 'square') {
+            frameWidth = activeObject.width;
+            frameHeight = activeObject.height;
+        } else if (frameShape === 'circle') {
+            frameWidth = frameHeight = activeObject.radius * 2;
+        } else if (frameShape === 'triangle') {
+            frameWidth = activeObject.width;
+            frameHeight = activeObject.height;
+        }
+
+        fabric.Image.fromURL(imageUrl, (img) => {
+            applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frameProps, imageUrl);
+
+            canvas.remove(activeObject);
+            canvas.add(img);
+            canvas.setActiveObject(img);
+            canvas.renderAll();
+            saveState();
+        });
+    };
+    reader.readAsDataURL(file);
+}
+
+// Apply aspect ratio to frame
+function applyAspectRatioToFrame(img, frameShape, frameWidth, frameHeight, frameProps, originalImageUrl) {
+    // Get original image dimensions (not scaled)
+    const imgWidth = img.width;
+    const imgHeight = img.height;
+
+    // Image always uses contain mode (appears complete) - use Math.min to fit entire image
+    // Math.min ensures the entire image fits within the frame, leaving blank space if needed
+    const scaleFactorX = Math.max(frameWidth / imgWidth);
+    const scaleFactorY = Math.max(frameHeight / imgHeight)
+    // Set scale absolutely (not multiply) to ensure image fits completely
+    img.set({
+        scaleX: scaleFactorX,
+        scaleY: scaleFactorY,
+    });
+
+    // Create clip path based on frame shape
+    let clipPath;
+    if (frameShape === 'square') {
+        clipPath = new fabric.Rect({
+            width: imgWidth,
+            height: imgHeight,
+            rx: 0,
+            ry: 0,
+            originX: 'center',
+            originY: 'center',
+        });
+    } else if (frameShape === 'circle') {
+        clipPath = new fabric.Circle({
+            radius: frameWidth / 2,
+            originX: 'center',
+            originY: 'center',
+        });
+    } else if (frameShape === 'triangle') {
+        clipPath = new fabric.Triangle({
+            width: frameWidth,
+            height: frameHeight,
+            originX: 'center',
+            originY: 'center',
+        });
+    }
+
+    img.set({
+        clipPath: clipPath,
+        left: frameProps.left,
+        top: frameProps.top,
+        originX: 'center',
+        originY: 'center',
+        isFrame: true,
+        frameShape: frameShape,
+        aspectRatio: frameProps.aspectRatio,
+        variable: frameProps.variable,
+        originalImageUrl: originalImageUrl,
+    });
+}
+
+// Change aspect ratio
+function changeAspectRatio(newRatio) {
+    if (!activeObject || !activeObject.isFrame) return;
+
+    const baseSize = 200;
+    let newWidth, newHeight;
+
+    // Calculate new dimensions based on aspect ratio
+    if (newRatio === 'none') {
+        // Keep current shape
+        if (activeObject.originalImageUrl) {
+            // Reload with current shape
+            reloadFrameImage(activeObject.frameShape);
+        } else {
+            // Just update the property
+            activeObject.aspectRatio = newRatio;
+            saveState();
+        }
+        return;
+    }
+
+    // Convert to rectangular frame with aspect ratio
+    const ratio = ASPECT_RATIOS[newRatio];
+    if (ratio >= 1) {
+        newWidth = baseSize;
+        newHeight = baseSize / ratio;
+    } else {
+        newHeight = baseSize;
+        newWidth = baseSize * ratio;
+    }
+
+    const frameProps = {
+        left: activeObject.left,
+        top: activeObject.top,
+        variable: activeObject.variable || '',
+        aspectRatio: newRatio,
+    };
+
+    if (activeObject.originalImageUrl) {
+        // Reload image with new frame
+        fabric.Image.fromURL(activeObject.originalImageUrl, (img) => {
+            applyAspectRatioToFrame(img, 'square', newWidth, newHeight, frameProps, activeObject.originalImageUrl);
+
+            const index = canvas.getObjects().indexOf(activeObject);
+            canvas.remove(activeObject);
+            canvas.insertAt(img, index);
+            canvas.setActiveObject(img);
+            canvas.renderAll();
+            saveState();
+        });
+    } else {
+        // Create new rectangular frame
+        const newFrame = new fabric.Rect({
+            left: frameProps.left,
+            top: frameProps.top,
+            width: newWidth,
+            height: newHeight,
+            fill: '#E5E7EB',
+            stroke: '#9CA3AF',
+            strokeWidth: 2,
+            rx: 0,
+            ry: 0,
+            isFrame: true,
+            frameShape: 'square',
+            aspectRatio: newRatio,
+            variable: frameProps.variable,
+        });
+
+        const index = canvas.getObjects().indexOf(activeObject);
+        canvas.remove(activeObject);
+        canvas.insertAt(newFrame, index);
+        canvas.setActiveObject(newFrame);
+        canvas.renderAll();
+        saveState();
+    }
+}
+
+// Reload frame image (when changing back to 'none')
+function reloadFrameImage(shape) {
+    if (!activeObject || !activeObject.originalImageUrl) return;
+
+    const frameProps = {
+        left: activeObject.left,
+        top: activeObject.top,
+        variable: activeObject.variable || '',
+        aspectRatio: 'none',
+    };
+
+    const frameSize = 150;
+    let frameWidth, frameHeight;
+
+    if (shape === 'square') {
+        frameWidth = frameHeight = frameSize;
+    } else if (shape === 'circle') {
+        frameWidth = frameHeight = frameSize;
+    } else if (shape === 'triangle') {
+        frameWidth = frameHeight = frameSize;
+    }
+
+    fabric.Image.fromURL(activeObject.originalImageUrl, (img) => {
+        applyAspectRatioToFrame(img, shape, frameWidth, frameHeight, frameProps, activeObject.originalImageUrl);
+
+        const index = canvas.getObjects().indexOf(activeObject);
+        canvas.remove(activeObject);
+        canvas.insertAt(img, index);
+        canvas.setActiveObject(img);
+        canvas.renderAll();
+        saveState();
+    });
+}
+
+// Delete frame image
+function deleteFrameImage() {
+    if (!activeObject || !activeObject.isFrame) return;
+
+    const frameShape = activeObject.frameShape || 'square';
+    const aspectRatio = activeObject.aspectRatio || 'none';
+    const frameProps = {
+        left: activeObject.left,
+        top: activeObject.top,
+        variable: activeObject.variable || '',
+    };
+
+    let newFrame;
+    const frameSize = 150;
+
+    if (aspectRatio !== 'none') {
+        // Create rectangular frame with aspect ratio
+        const ratio = ASPECT_RATIOS[aspectRatio];
+        let width, height;
+
+        if (ratio >= 1) {
+            width = 200;
+            height = 200 / ratio;
+        } else {
+            height = 200;
+            width = 200 * ratio;
+        }
+
+        newFrame = new fabric.Rect({
+            left: frameProps.left,
+            top: frameProps.top,
+            width: width,
+            height: height,
+            fill: '#E5E7EB',
+            stroke: '#9CA3AF',
+            strokeWidth: 2,
+            rx: 0,
+            ry: 0,
+            isFrame: true,
+            frameShape: 'square',
+            aspectRatio: aspectRatio,
+            variable: frameProps.variable,
+        });
+    } else {
+        // Create frame based on original shape
+        switch(frameShape) {
+            case 'square':
+                newFrame = new fabric.Rect({
+                    left: frameProps.left,
+                    top: frameProps.top,
+                    width: frameSize,
+                    height: frameSize,
+                    fill: '#E5E7EB',
+                    stroke: '#9CA3AF',
+                    strokeWidth: 2,
+                    rx: 0,
+                    ry: 0,
+                    isFrame: true,
+                    frameShape: 'square',
+                    aspectRatio: 'none',
+                    variable: frameProps.variable,
+                });
+                break;
+            case 'circle':
+                newFrame = new fabric.Circle({
+                    left: frameProps.left,
+                    top: frameProps.top,
+                    radius: frameSize / 2,
+                    fill: '#E5E7EB',
+                    stroke: '#9CA3AF',
+                    strokeWidth: 2,
+                    isFrame: true,
+                    frameShape: 'circle',
+                    aspectRatio: 'none',
+                    variable: frameProps.variable,
+                });
+                break;
+            case 'triangle':
+                newFrame = new fabric.Triangle({
+                    left: frameProps.left,
+                    top: frameProps.top,
+                    width: frameSize,
+                    height: frameSize,
+                    fill: '#E5E7EB',
+                    stroke: '#9CA3AF',
+                    strokeWidth: 2,
+                    isFrame: true,
+                    frameShape: 'triangle',
+                    aspectRatio: 'none',
+                    variable: frameProps.variable,
+                });
+                break;
+        }
+    }
+
+    if (newFrame) {
+        const index = canvas.getObjects().indexOf(activeObject);
+        canvas.remove(activeObject);
+        canvas.insertAt(newFrame, index);
+        canvas.setActiveObject(newFrame);
+        canvas.renderAll();
+        saveState();
+    }
+}
+
+// Copy object
+function copyObject() {
+    if (activeObject) {
+        activeObject.clone((cloned) => {
+            copiedObject = cloned;
+        }, ['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']);
+    }
+}
+
+// Paste object
+function pasteObject() {
+    if (copiedObject) {
+        copiedObject.clone((cloned) => {
+            cloned.set({
+                left: cloned.left + 10,
+                top: cloned.top + 10,
+            });
+            canvas.add(cloned);
+            copiedObject = cloned;
+            canvas.setActiveObject(cloned);
+            canvas.renderAll();
+        }, ['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']);
+    }
+}
+
+// Update layers list with drag and drop
+function updateLayers() {
+    const layersList = document.getElementById('layers-list');
+    layersList.innerHTML = '';
+
+    const objects = canvas.getObjects();
+
+    if (objects.length === 0) {
+        layersList.innerHTML = '<p class="text-sm text-gray-400 p-2">Nenhuma camada</p>';
+        return;
+    }
+
+    objects.slice().reverse().forEach((obj, index) => {
+        const layerItem = document.createElement('div');
+        const actualIndex = objects.length - 1 - index;
+        const isActive = activeObject === obj;
+
+        let icon = 'texture';
+        let name = 'Objeto';
+
+        // Show variable name if exists
+        if (obj.variable) {
+            name = obj.variable;
+        } else {
+            if (obj.isFrame) {
+                icon = 'image';
+                name = 'Moldura de Imagem';
+            } else if (obj.type === 'rect') {
+                icon = 'check_box_outline_blank';
+                name = 'Retângulo';
+            } else if (obj.type === 'circle') {
+                icon = 'circle';
+                name = 'Círculo';
+            } else if (obj.type === 'triangle') {
+                icon = 'change_history';
+                name = 'Triângulo';
+            } else if (obj.type === 'i-text' || obj.type === 'textbox') {
+                icon = 'title';
+                name = obj.text ? obj.text.substring(0, 20) : 'Texto';
+            } else if (obj.type === 'image') {
+                icon = 'image';
+                name = 'Imagem';
+            }
+        }
+
+        layerItem.className = `layer-item flex items-center justify-between p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${isActive ? 'active' : ''}`;
+        layerItem.draggable = true;
+        layerItem.dataset.index = actualIndex;
+
+        layerItem.innerHTML = `
+            <div class="flex items-center gap-3 text-sm">
+                <span class="material-symbols-outlined text-text-light-secondary dark:text-dark-secondary text-base">${icon}</span>
+                <span>${name}</span>
+            </div>
+            <span class="visibility-toggle material-symbols-outlined text-text-light-secondary dark:text-dark-secondary text-lg">${obj.visible !== false ? 'visibility' : 'visibility_off'}</span>
+        `;
+
+        // Drag and drop events
+        layerItem.addEventListener('dragstart', (e) => {
+            draggedLayerIndex = actualIndex;
+            layerItem.classList.add('dragging');
+        });
+
+        layerItem.addEventListener('dragend', (e) => {
+            layerItem.classList.remove('dragging');
+            document.querySelectorAll('.layer-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        });
+
+        layerItem.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            layerItem.classList.add('drag-over');
+        });
+
+        layerItem.addEventListener('dragleave', (e) => {
+            layerItem.classList.remove('drag-over');
+        });
+
+        layerItem.addEventListener('drop', (e) => {
+            e.preventDefault();
+            layerItem.classList.remove('drag-over');
+
+            const dropIndex = parseInt(layerItem.dataset.index);
+
+            if (draggedLayerIndex !== null && draggedLayerIndex !== dropIndex) {
+                const objects = canvas.getObjects();
+                const draggedObj = objects[draggedLayerIndex];
+
+                // Remove and reinsert at new position
+                canvas.remove(draggedObj);
+                canvas.insertAt(draggedObj, dropIndex);
+                canvas.renderAll();
+
+                saveState();
+                updateLayers();
+            }
+        });
+
+        layerItem.addEventListener('click', (e) => {
+            if (e.target.classList.contains('visibility-toggle')) {
+                // Toggle visibility
+                obj.visible = !obj.visible;
+                canvas.renderAll();
+                updateLayers();
+            } else {
+                // Select object
+                canvas.setActiveObject(obj);
+                canvas.renderAll();
+            }
+        });
+
+        layersList.appendChild(layerItem);
+    });
+}
+
+// Zoom
+function zoomIn() {
+    zoomLevel = Math.min(zoomLevel + 0.1, 3);
+    applyZoom();
+}
+
+function zoomOut() {
+    zoomLevel = Math.max(zoomLevel - 0.1, 0.5);
+    applyZoom();
+}
+
+function applyZoom() {
+    canvas.setZoom(zoomLevel);
+    canvas.setWidth(CANVAS_WIDTH * zoomLevel);
+    canvas.setHeight(CANVAS_HEIGHT * zoomLevel);
+    document.getElementById('zoom-level').textContent = Math.round(zoomLevel * 100) + '%';
+}
+
+// Save to localStorage with custom properties
+function saveToLocalStorage() {
+    try {
+        const json = JSON.stringify(canvas.toJSON(['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']));
+        localStorage.setItem('ebookify-canvas', json);
+        localStorage.setItem('ebookify-canvas-backup', json); // Backup
+        alert('Rascunho salvo com sucesso!');
+    } catch (error) {
+        console.error('Erro ao salvar:', error);
+        alert('Erro ao salvar rascunho. O arquivo pode ser muito grande.');
+    }
+}
+
+// Load from localStorage
+function loadFromLocalStorage() {
+    try {
+        const json = localStorage.getItem('ebookify-canvas');
+        if (json) {
+            canvas.loadFromJSON(JSON.parse(json), () => {
+                canvas.requestRenderAll();
+                saveState();
+                updateLayers();
+            });
+        }
+    } catch (error) {
+        console.error('Erro ao carregar:', error);
+        // Try backup
+        try {
+            const backup = localStorage.getItem('ebookify-canvas-backup');
+            if (backup) {
+                canvas.loadFromJSON(JSON.parse(backup), () => {
+                    canvas.requestRenderAll();
+                    saveState();
+                    updateLayers();
+                });
+                alert('Carregado do backup devido a erro no arquivo principal.');
+            }
+        } catch (backupError) {
+            console.error('Erro ao carregar backup:', backupError);
+        }
+    }
+}
+
+// Event listeners setup
+function setupEventListeners() {
+    // Add components
+    document.getElementById('add-shape-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('shape-modal').classList.add('show');
+    });
+
+    document.getElementById('add-text-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        addText();
+    });
+
+    document.getElementById('add-image-btn').addEventListener('click', (e) => {
+        e.preventDefault();
+        document.getElementById('image-frame-modal').classList.add('show');
+    });
+
+    // Shape modal
+    document.querySelectorAll('#shape-modal .shape-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const shape = option.dataset.shape;
+            addShape(shape);
+            document.getElementById('shape-modal').classList.remove('show');
+        });
+    });
+
+    document.getElementById('close-shape-modal').addEventListener('click', () => {
+        document.getElementById('shape-modal').classList.remove('show');
+    });
+
+    // Image frame modal
+    document.querySelectorAll('#image-frame-modal .shape-option').forEach(option => {
+        option.addEventListener('click', () => {
+            const frame = option.dataset.frame;
+            addImageFrame(frame);
+            document.getElementById('image-frame-modal').classList.remove('show');
+        });
+    });
+
+    document.getElementById('close-frame-modal').addEventListener('click', () => {
+        document.getElementById('image-frame-modal').classList.remove('show');
+    });
+
+    // Add image to frame
+    document.getElementById('add-image-to-frame-btn').addEventListener('click', () => {
+        document.getElementById('frame-image-upload').click();
+    });
+
+    document.getElementById('frame-image-upload').addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            addImageToFrame(e.target.files[0]);
+        }
+    });
+
+    // Aspect ratio change
+    document.getElementById('aspect-ratio').addEventListener('change', (e) => {
+        changeAspectRatio(e.target.value);
+    });
+
+    // Delete frame image
+    document.getElementById('delete-frame-image-btn').addEventListener('click', () => {
+        deleteFrameImage();
+    });
+
+    // Close modals on background click
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.remove('show');
+            }
+        });
+    });
+
+    // Save
+    document.getElementById('save-draft-btn').addEventListener('click', saveToLocalStorage);
+
+    // Zoom
+    document.getElementById('zoom-in-btn').addEventListener('click', zoomIn);
+    document.getElementById('zoom-out-btn').addEventListener('click', zoomOut);
+
+    // Undo/Redo
+    document.getElementById('undo-btn').addEventListener('click', undo);
+    document.getElementById('redo-btn').addEventListener('click', redo);
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            if (e.key === 'c' || e.key === 'C') {
+                e.preventDefault();
+                copyObject();
+            } else if (e.key === 'v' || e.key === 'V') {
+                e.preventDefault();
+                pasteObject();
+            } else if (e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+            } else if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) {
+                e.preventDefault();
+                redo();
+            } else if (e.key === 's') {
+                e.preventDefault();
+                saveToLocalStorage();
+            }
+        }
+
+        if (e.key === 'Delete' && activeObject) {
+            canvas.remove(activeObject);
+            canvas.renderAll();
+        }
+    });
+
+    // Background color
+    document.getElementById('bg-color').addEventListener('change', (e) => {
+        canvas.backgroundColor = e.target.value;
+        document.getElementById('bg-color-preview').value = e.target.value;
+        canvas.renderAll();
+        saveState();
+    });
+
+    document.getElementById('bg-color-preview').addEventListener('change', (e) => {
+        canvas.backgroundColor = e.target.value;
+        document.getElementById('bg-color').value = e.target.value;
+        canvas.renderAll();
+        saveState();
+    });
+
+    // Text variable
+    document.getElementById('text-variable').addEventListener('change', (e) => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.variable = e.target.value;
+            canvas.renderAll();
+            saveState();
+            updateLayers();
+        }
+    });
+
+    // Image variable
+    document.getElementById('image-variable').addEventListener('change', (e) => {
+        if (activeObject) {
+            activeObject.variable = e.target.value;
+            canvas.renderAll();
+            saveState();
+            updateLayers();
+        }
+    });
+
+    // Object properties
+    document.getElementById('fill-color').addEventListener('change', (e) => {
+        if (activeObject) {
+            activeObject.set('fill', e.target.value);
+            document.getElementById('fill-color-preview').value = e.target.value;
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('fill-color-preview').addEventListener('change', (e) => {
+        if (activeObject) {
+            activeObject.set('fill', e.target.value);
+            document.getElementById('fill-color').value = e.target.value;
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('stroke-color').addEventListener('change', (e) => {
+        if (activeObject) {
+            activeObject.set('stroke', e.target.value);
+            document.getElementById('stroke-color-preview').value = e.target.value;
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('stroke-color-preview').addEventListener('change', (e) => {
+        if (activeObject) {
+            activeObject.set('stroke', e.target.value);
+            document.getElementById('stroke-color').value = e.target.value;
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('stroke-width').addEventListener('input', (e) => {
+        if (activeObject) {
+            activeObject.set('strokeWidth', parseInt(e.target.value));
+            document.getElementById('stroke-width-value').textContent = e.target.value + 'px';
+            canvas.renderAll();
+        }
+    });
+
+    document.getElementById('stroke-width').addEventListener('change', () => {
+        saveState();
+    });
+
+    document.getElementById('font-size').addEventListener('input', (e) => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.set('fontSize', parseInt(e.target.value));
+            document.getElementById('font-size-value').textContent = e.target.value + 'px';
+            canvas.renderAll();
+        }
+    });
+
+    document.getElementById('font-size').addEventListener('change', () => {
+        saveState();
+    });
+
+    document.getElementById('font-family').addEventListener('change', (e) => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.set('fontFamily', e.target.value);
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('bold-btn').addEventListener('click', () => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            const newWeight = activeObject.fontWeight === 'bold' ? 'normal' : 'bold';
+            activeObject.set('fontWeight', newWeight);
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('italic-btn').addEventListener('click', () => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            const newStyle = activeObject.fontStyle === 'italic' ? 'normal' : 'italic';
+            activeObject.set('fontStyle', newStyle);
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('underline-btn').addEventListener('click', () => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.set('underline', !activeObject.underline);
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('align-left-btn').addEventListener('click', () => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.set('textAlign', 'left');
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('align-center-btn').addEventListener('click', () => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.set('textAlign', 'center');
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('align-right-btn').addEventListener('click', () => {
+        if (activeObject && (activeObject.type === 'i-text' || activeObject.type === 'textbox')) {
+            activeObject.set('textAlign', 'right');
+            canvas.renderAll();
+            saveState();
+        }
+    });
+
+    document.getElementById('corner-radius').addEventListener('input', (e) => {
+        if (activeObject && activeObject.type === 'rect') {
+            activeObject.set('rx', parseInt(e.target.value));
+            activeObject.set('ry', parseInt(e.target.value));
+            document.getElementById('corner-radius-value').textContent = e.target.value + 'px';
+            canvas.renderAll();
+        }
+    });
+
+    document.getElementById('corner-radius').addEventListener('change', () => {
+        saveState();
+    });
+
+    document.getElementById('opacity').addEventListener('input', (e) => {
+        if (activeObject) {
+            activeObject.set('opacity', parseInt(e.target.value) / 100);
+            document.getElementById('opacity-value').textContent = e.target.value + '%';
+            canvas.renderAll();
+        }
+    });
+
+    document.getElementById('opacity').addEventListener('change', () => {
+        saveState();
+    });
+
+    document.getElementById('delete-btn').addEventListener('click', () => {
+        if (activeObject) {
+            canvas.remove(activeObject);
+            canvas.renderAll();
+        }
+    });
+
+    document.getElementById('duplicate-btn').addEventListener('click', () => {
+        if (activeObject) {
+            activeObject.clone((cloned) => {
+                cloned.set({
+                    left: activeObject.left + 10,
+                    top: activeObject.top + 10,
+                });
+                canvas.add(cloned);
+                canvas.setActiveObject(cloned);
+                canvas.renderAll();
+            }, ['variable', 'isFrame', 'frameShape', 'aspectRatio', 'originalImageUrl']);
+        }
+    });
+
+    document.getElementById('preview-btn').addEventListener('click', () => {
+        // Export current canvas as PNG for preview
+        const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
+        const win = window.open();
+        win.document.write('<img src="' + dataURL + '" style="max-width: 100%; height: auto;"/>');
+    });
+}
+
+// Initialize on load
+window.addEventListener('load', () => {
+    initCanvas();
+    setupEventListeners();
+    updateUndoRedoButtons();
+});
+</script>
+
+</body></html>
